@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
 use tinysearch_bus::{
     BackendConfig, ExecuteToolRequest, ExecuteToolResponse, ListToolsResponse, PresentationMode,
     ProviderConfig, Role, SearchConfig, ToolSpec, configured_provider_tools, provider_tool_specs,
-    role_providers, select_tools,
+    role_provider_tool, role_providers, select_tools,
 };
 
 mod roles;
@@ -145,12 +145,15 @@ impl SearchService {
                     .next()
             })
             .ok_or(Error::MissingProvider)?;
-        if !role_providers(available, &self.config.presentation, Role::Search).contains(&selected) {
-            return Err(Error::UnavailableProvider(selected));
-        }
-        let first_tool = available
-            .get(&selected)
-            .and_then(|tools| tools.first())
+        // Explicit and configured Router choices override fallback order.
+        // Eligibility still requires the selected provider's Search tool.
+        let first_tool = role_provider_tool(Role::Search, &selected)
+            .and_then(|name| {
+                available
+                    .get(&selected)?
+                    .iter()
+                    .find(|tool| tool.name == name)
+            })
             .cloned()
             .ok_or_else(|| Error::UnavailableProvider(selected.clone()))?;
         let mut provider_request = request;

@@ -531,26 +531,42 @@ async fn router_configured_search_provider_overrides_role_fallback_order() -> cr
 async fn router_omitted_order_provider(explicit: bool) -> crate::Result<()> {
     let mut config = SearchConfig::default();
     config.presentation.mode = PresentationMode::Router;
-    config.presentation.roles.insert(Role::Search, vec!["gemini".into()]);
+    config
+        .presentation
+        .roles
+        .insert(Role::Search, vec!["gemini".into()]);
     if !explicit {
         config.presentation.provider = Some("exa".into());
     }
     for name in ["gemini", "exa"] {
-        config.providers.insert(name.into(), ProviderConfig {
-            credential: Some("test-key".into()), ..ProviderConfig::default()
-        });
+        config.providers.insert(
+            name.into(),
+            ProviderConfig {
+                credential: Some("test-key".into()),
+                ..ProviderConfig::default()
+            },
+        );
     }
-    let providers: BTreeMap<String, Arc<dyn SearchProvider>> =
-        ["gemini", "exa"].into_iter().map(|name|
-            (name.into(), Arc::new(MockProvider) as Arc<dyn SearchProvider>)
-        ).collect();
+    let providers: BTreeMap<String, Arc<dyn SearchProvider>> = ["gemini", "exa"]
+        .into_iter()
+        .map(|name| {
+            (
+                name.into(),
+                Arc::new(MockProvider) as Arc<dyn SearchProvider>,
+            )
+        })
+        .collect();
     let arguments = if explicit {
         json!({"query":"fixture query","provider":"exa"})
     } else {
         json!({"query":"fixture query"})
     };
     let response = SearchService::with_providers(config, providers)
-        .execute_tool(ExecuteToolRequest { name: "search".into(), arguments }).await?;
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments,
+        })
+        .await?;
     assert_eq!(response.provider, "exa");
     Ok(())
 }

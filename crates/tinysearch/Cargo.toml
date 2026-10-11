@@ -33,6 +33,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+# Direct-provider regression fixtures verify real HTTP requests without live services.
+wiremock = "0.6"
 tokio = { workspace = true }
 # The GitHub release verifier passes an explicit empty module configuration.
 serde_json = { workspace = true }

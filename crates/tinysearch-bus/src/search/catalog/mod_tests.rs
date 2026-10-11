@@ -142,7 +142,8 @@ fn provider_roles_and_defaults_match_the_contract() {
         Some("parallel_extract")
     );
     assert_eq!(provider_roles("unknown").len(), 0);
-    assert_eq!(provider_roles("gemini"), [Role::Answer]);
+    assert_eq!(provider_roles("gemini"), [Role::Search, Role::Answer]);
+    assert_eq!(role_provider_tool(Role::Search, "gemini"), Some("gemini_agentic_search"));
     assert_eq!(provider_roles("gemini_deep_research"), [Role::Answer]);
     assert_eq!(provider_roles("tinyfish"), [Role::Search, Role::Contents]);
     assert_eq!(provider_roles("tavily"), [Role::Search, Role::Contents]);
@@ -163,7 +164,7 @@ fn provider_roles_and_defaults_match_the_contract() {
         default_role_providers(Role::Search),
         [
             "exa", "brave", "tavily", "parallel", "querit", "seltz", "searxng", "tinyfish",
-            "keenable"
+            "keenable", "gemini"
         ]
     );
     assert_eq!(
@@ -187,7 +188,7 @@ fn provider_roles_and_defaults_match_the_contract() {
             "tavily",
             "seltz",
             "searxng",
-            "keenable"
+            "keenable", "gemini"
         ]
     );
     // The TinyHumans backend does not proxy TinyFish: it is own-key only.
@@ -293,7 +294,7 @@ fn roles_mode_lists_one_tool_per_served_role() {
     );
     assert_eq!(
         role_providers(&available, &config.presentation, Role::Search),
-        ["exa", "brave", "tinyfish"]
+        ["exa", "brave", "tinyfish", "gemini"]
     );
     assert_eq!(
         role_providers(&available, &config.presentation, Role::Answer),
@@ -346,7 +347,7 @@ fn configured_role_order_wins_and_skips_unusable_or_unfit_providers() {
     let available = configured_provider_tools(&config, &provider_tool_specs());
     assert_eq!(
         role_providers(&available, &config.presentation, Role::Search),
-        ["brave", "exa"]
+        ["brave", "gemini", "exa"]
     );
     assert_eq!(
         role_providers(&available, &config.presentation, Role::Answer),
@@ -369,7 +370,7 @@ fn role_tool_schemas_are_generic() -> Result<(), String> {
     );
     assert_eq!(
         search.parameters["properties"]["provider"]["enum"],
-        json!(["exa", "brave", "tinyfish"])
+        json!(["exa", "brave", "tinyfish", "gemini"])
     );
     assert!(search.description.contains("exa, brave, tinyfish"));
 

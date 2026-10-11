@@ -1,6 +1,7 @@
 //! Direct Gemini Search-role regression tests using real HTTP fixtures.
-use super::super::builtins;
 use super::*;
+
+use super::super::builtins;
 use crate::{Error, ExecuteToolRequest, ProviderConfig};
 use crate::{Role, SearchConfig, SearchService, names::tools};
 use serde_json::json;

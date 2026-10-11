@@ -39,7 +39,7 @@ pub fn default_role_providers(role: Role) -> &'static [&'static str] {
 pub fn role_provider_tool(role: Role, provider: &str) -> Option<&'static str> {
     Some(match (role, provider) {
         (Role::Search, "exa") => "exa_search",
-        (Role::Search, "gemini") => "gemini_agentic_search",
+        (Role::Search | Role::Answer, "gemini") => "gemini_agentic_search",
         (Role::Search, "brave") => "brave_web_search",
         (Role::Search, "tavily") => "tavily_search",
         (Role::Search, "querit") => "querit_search",
@@ -48,7 +48,6 @@ pub fn role_provider_tool(role: Role, provider: &str) -> Option<&'static str> {
         (Role::Search, "tinyfish") => "tinyfish_search",
         (Role::Search, "parallel") => "parallel_search",
         (Role::Search, "keenable") => "keenable_search",
-        (Role::Answer, "gemini") => "gemini_agentic_search",
         (Role::Answer, "gemini_deep_research") => "gemini_deep_research",
         (Role::Answer, "exa") => "exa_answer",
         (Role::Answer, "parallel") => "parallel_chat",

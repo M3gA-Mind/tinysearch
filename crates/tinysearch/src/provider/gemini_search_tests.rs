@@ -384,3 +384,102 @@ async fn configured_gemini_first_search_falls_back_to_exa_after_failure() -> cra
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn gemini_router_search_returns_grounded_results_instead_of_answer() -> crate::Result<()> {
+    let server = MockServer::start().await;
+    gemini_mock(&server, grounding(), 1).await;
+    let mut config = config(&server, &["gemini"]);
+    config.providers.remove("exa");
+    config.presentation.mode = crate::PresentationMode::Router;
+    let service = SearchService::with_providers(config, builtins());
+    assert_eq!(service.list_tools().tools[0].name, "search");
+    let response = service
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments: json!({"query":"fixture query"}),
+        })
+        .await?;
+    assert_eq!(response.provider, "gemini");
+    assert_eq!(response.status, SearchStatus::Ok);
+    assert_eq!(response.answer, None);
+    assert_eq!(
+        response
+            .results
+            .iter()
+            .map(|result| result.url.as_str())
+            .collect::<Vec<_>>(),
+        [
+            "https://second.test",
+            "https://first.test",
+            "https://third.test"
+        ]
+    );
+    assert_eq!(
+        response.results[0].snippet.as_deref(),
+        Some("Second source snippet.")
+    );
+    assert_eq!(
+        response
+            .citations
+            .iter()
+            .map(|citation| citation.url.as_str())
+            .collect::<Vec<_>>(),
+        response
+            .results
+            .iter()
+            .map(|result| result.url.as_str())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        server.received_requests().await.unwrap_or_default().len(),
+        1
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn gemini_router_search_without_grounding_returns_empty() -> crate::Result<()> {
+    let server = MockServer::start().await;
+    gemini_mock(
+        &server,
+        json!({"candidates":[{"content":{"parts":[{"text":"Unsupported answer"}]}}]}),
+        1,
+    )
+    .await;
+    let mut config = config(&server, &["gemini"]);
+    config.providers.remove("exa");
+    config.presentation.mode = crate::PresentationMode::Router;
+    let service = SearchService::with_providers(config, builtins());
+    let response = service
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments: json!({"query":"fixture query","provider":"gemini"}),
+        })
+        .await?;
+    assert_eq!(response.status, SearchStatus::Empty);
+    assert_eq!(response.results.len(), 0);
+    assert_eq!(response.citations.len(), 0);
+    assert_eq!(response.answer, None);
+    Ok(())
+}
+
+#[tokio::test]
+async fn native_gemini_tool_keeps_answer_and_citations() -> crate::Result<()> {
+    let server = MockServer::start().await;
+    gemini_mock(&server, grounding(), 1).await;
+    let mut config = config(&server, &["gemini"]);
+    config.presentation.mode = crate::PresentationMode::AllTools;
+    let service = SearchService::with_providers(config, builtins());
+    let response = service
+        .execute_tool(ExecuteToolRequest {
+            name: "gemini_agentic_search".into(),
+            arguments: json!({"query":"fixture query"}),
+        })
+        .await?;
+    assert_eq!(response.answer.as_deref(), Some("A grounded answer."));
+    assert_eq!(response.results.len(), 0);
+    assert_eq!(response.citations.len(), 3);
+    assert_eq!(response.role, None);
+    Ok(())
+}

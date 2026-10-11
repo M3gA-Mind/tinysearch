@@ -186,14 +186,22 @@ async fn missing_keys_are_removed_from_search_candidates() -> crate::Result<()> 
     let server = MockServer::start().await;
     gemini_mock(&server, grounding(), 1).await;
     let mut config = config(&server, &["exa", "gemini"]);
-    config.providers.get_mut("exa").unwrap().credential = None;
+    config
+        .providers
+        .get_mut("exa")
+        .ok_or(Error::InvalidArguments)?
+        .credential = None;
     let service = SearchService::with_providers(config.clone(), builtins());
     let response = service
         .execute_tool(search(json!({"query":"fixture query"})))
         .await?;
     assert_eq!(response.provider, "gemini");
     assert!(response.fallback_from.is_empty());
-    config.providers.get_mut("gemini").unwrap().credential = Some(" ".into());
+    config
+        .providers
+        .get_mut("gemini")
+        .ok_or(Error::InvalidArguments)?
+        .credential = Some(" ".into());
     let service = SearchService::with_providers(config, builtins());
     assert!(
         !service
@@ -241,7 +249,11 @@ async fn gemini_search_limits_results_and_preserves_answer_behavior() -> crate::
     let server = MockServer::start().await;
     gemini_mock(&server, grounding(), 4).await;
     let mut config = config(&server, &["gemini"]);
-    config.providers.get_mut("gemini").unwrap().max_results = Some(2);
+    config
+        .providers
+        .get_mut("gemini")
+        .ok_or(Error::InvalidArguments)?
+        .max_results = Some(2);
     let service = SearchService::with_providers(config, builtins());
     for (arguments, count) in [
         (json!({"query":"fixture query"}), 2),
@@ -280,12 +292,11 @@ async fn gemini_search_failure_keeps_provider_error_classification() {
         let service = SearchService::with_providers(config(&server, &["gemini"]), builtins());
         let error = service
             .execute_tool(search(json!({"query":"fixture query"})))
-            .await
-            .unwrap_err();
+            .await;
         assert!(match status {
-            401 => matches!(error, Error::ProviderUnauthorized { .. }),
-            429 => matches!(error, Error::RateLimited),
-            _ => matches!(error, Error::ProviderUnavailable(_)),
+            401 => matches!(error, Err(Error::ProviderUnauthorized { .. })),
+            429 => matches!(error, Err(Error::RateLimited)),
+            _ => matches!(error, Err(Error::ProviderUnavailable(_))),
         });
     }
 }

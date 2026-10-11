@@ -54,7 +54,7 @@ impl SearchProvider for BuiltinProvider {
         backend: &'a BackendConfig,
         request: &'a ExecuteToolRequest,
     ) -> ProviderFuture<'a> {
-        Box::pin(async move { self.run(config, backend, request, None).await })
+        Box::pin(async move { self.run(config, backend, request).await })
     }
 
     fn execute_role<'a>(
@@ -64,12 +64,24 @@ impl SearchProvider for BuiltinProvider {
         request: &'a ExecuteToolRequest,
         role: Role,
     ) -> ProviderFuture<'a> {
-        Box::pin(async move { self.run(config, backend, request, Some(role)).await })
+        Box::pin(async move {
+            self.run_for_role(config, backend, request, Some(role))
+                .await
+        })
     }
 }
 
 impl BuiltinProvider {
     async fn run(
+        &self,
+        config: &ProviderConfig,
+        backend: &BackendConfig,
+        request: &ExecuteToolRequest,
+    ) -> Result<ExecuteToolResponse> {
+        self.run_for_role(config, backend, request, None).await
+    }
+
+    async fn run_for_role(
         &self,
         config: &ProviderConfig,
         backend: &BackendConfig,

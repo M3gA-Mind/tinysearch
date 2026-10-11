@@ -516,3 +516,41 @@ async fn router_rejects_answer_only_provider_in_mixed_configuration() {
         );
     }
 }
+
+#[tokio::test]
+async fn router_explicit_search_provider_overrides_role_fallback_order() -> crate::Result<()> {
+    router_omitted_order_provider(true).await
+}
+
+#[tokio::test]
+async fn router_configured_search_provider_overrides_role_fallback_order() -> crate::Result<()> {
+    router_omitted_order_provider(false).await
+}
+
+/// Keeps both providers usable while excluding the selected one from fallback order.
+async fn router_omitted_order_provider(explicit: bool) -> crate::Result<()> {
+    let mut config = SearchConfig::default();
+    config.presentation.mode = PresentationMode::Router;
+    config.presentation.roles.insert(Role::Search, vec!["gemini".into()]);
+    if !explicit {
+        config.presentation.provider = Some("exa".into());
+    }
+    for name in ["gemini", "exa"] {
+        config.providers.insert(name.into(), ProviderConfig {
+            credential: Some("test-key".into()), ..ProviderConfig::default()
+        });
+    }
+    let providers: BTreeMap<String, Arc<dyn SearchProvider>> =
+        ["gemini", "exa"].into_iter().map(|name|
+            (name.into(), Arc::new(MockProvider) as Arc<dyn SearchProvider>)
+        ).collect();
+    let arguments = if explicit {
+        json!({"query":"fixture query","provider":"exa"})
+    } else {
+        json!({"query":"fixture query"})
+    };
+    let response = SearchService::with_providers(config, providers)
+        .execute_tool(ExecuteToolRequest { name: "search".into(), arguments }).await?;
+    assert_eq!(response.provider, "exa");
+    Ok(())
+}

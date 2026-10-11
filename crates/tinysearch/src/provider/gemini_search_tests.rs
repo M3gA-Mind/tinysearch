@@ -1,6 +1,9 @@
 //! Direct Gemini Search-role regression tests using real HTTP fixtures.
+use super::super::builtins;
 use super::*;
+use crate::{Error, ExecuteToolRequest, ProviderConfig};
 use crate::{Role, SearchConfig, SearchService, names::tools};
+use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
     matchers::{body_json, header, method, path},
@@ -311,7 +314,7 @@ fn search_grounding_ignores_invalid_chunks_and_bounds_output_and_input() {
     chunks.extend((0..25).map(
         |i| json!({"web":{"uri":format!("https://source{i}.test"),"title":"界".repeat(301)}}),
     ));
-    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+    let response = normalize(&json!({"candidates":[{"groundingMetadata":{
         "groundingChunks":chunks,"groundingSupports":[
             {"groundingChunkIndices":[null,-1,"not an index",100_000,0,1,2]},
             {"segment":{"text":" 字 ".repeat(1000)},"groundingChunkIndices":[3,3]}
@@ -331,7 +334,7 @@ fn search_grounding_ignores_invalid_chunks_and_bounds_output_and_input() {
     // Sources beyond the bounded input scan never become results.
     let mut chunks = vec![json!({}); MAX_GROUNDING_CHUNKS];
     chunks.push(json!({"web":{"uri":"https://outside.test"}}));
-    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+    let response = normalize(&json!({"candidates":[{"groundingMetadata":{
         "groundingChunks":chunks,"groundingSupports":[{"groundingChunkIndices":[MAX_GROUNDING_CHUNKS]}]
     }}]}));
     assert_eq!(response.status, SearchStatus::Empty);
@@ -340,11 +343,11 @@ fn search_grounding_ignores_invalid_chunks_and_bounds_output_and_input() {
 #[test]
 fn search_grounding_without_metadata_or_support_text_is_well_formed() {
     for value in [json!({}), json!({"candidates":[{"groundingMetadata":{}}]})] {
-        let response = gemini_search::normalize(&value);
+        let response = normalize(&value);
         assert_eq!(response.status, SearchStatus::Empty);
         assert_eq!(response.answer, None);
     }
-    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+    let response = normalize(&json!({"candidates":[{"groundingMetadata":{
         "groundingChunks":[{"web":{"uri":"https://bare.test"}}],
         "groundingSupports":[{"segment":{"text":" "},"groundingChunkIndices":[0]}]
     }}]}));

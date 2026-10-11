@@ -94,3 +94,7 @@ fn usable_url(url: &str) -> bool {
                 && url.password().is_none()
         })
 }
+
+#[cfg(test)]
+#[path = "gemini_search_tests.rs"]
+mod test;

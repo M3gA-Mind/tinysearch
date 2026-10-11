@@ -53,5 +53,5 @@ tinybus_module::module_export! {
 mod test;
 
 #[cfg(test)]
-#[path = "gemini_search_tests.rs"]
+#[path = "mod_gemini_search_tests.rs"]
 mod gemini_search_tests;

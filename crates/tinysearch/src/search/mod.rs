@@ -151,8 +151,22 @@ impl SearchService {
         if let Some(values) = provider_request.arguments.as_object_mut() {
             values.remove("provider");
         }
-        self.dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
-            .await
+        let mut response = self
+            .dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
+            .await?;
+        if selected == "gemini" {
+            let count = self
+                .config
+                .providers
+                .get(&selected)
+                .and_then(|config| config.max_results)
+                .unwrap_or(20)
+                .clamp(1, 20);
+            let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
+            response.results.truncate(count);
+            response.citations.truncate(count);
+        }
+        Ok(response)
     }
 
     /// Validates `request` against a provider tool and runs it on `provider`.

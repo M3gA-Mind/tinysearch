@@ -483,3 +483,24 @@ async fn native_gemini_tool_keeps_answer_and_citations() -> crate::Result<()> {
     assert_eq!(response.role, None);
     Ok(())
 }
+
+#[tokio::test]
+async fn gemini_router_respects_configured_result_limit() -> crate::Result<()> {
+    let server = MockServer::start().await;
+    gemini_mock(&server, grounding(), 1).await;
+    let mut config = config(&server, &["gemini"]);
+    config.providers.remove("exa");
+    config.presentation.mode = crate::PresentationMode::Router;
+    config.providers.get_mut("gemini").unwrap().max_results = Some(2);
+    let response = SearchService::with_providers(config, builtins())
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments: json!({"query":"fixture query"}),
+        })
+        .await?;
+    assert_eq!(response.results.len(), 2);
+    assert_eq!(response.citations.len(), 2);
+    assert_eq!(response.results[0].url, "https://second.test");
+    assert_eq!(response.results[1].url, "https://first.test");
+    Ok(())
+}

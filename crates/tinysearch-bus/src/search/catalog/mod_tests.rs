@@ -191,8 +191,7 @@ fn provider_roles_and_defaults_match_the_contract() {
             "tavily",
             "seltz",
             "searxng",
-            "keenable",
-            "gemini"
+            "keenable"
         ]
     );
     // The TinyHumans backend does not proxy TinyFish: it is own-key only.

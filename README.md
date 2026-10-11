@@ -39,7 +39,8 @@ quick depth by the quick providers (Parallel included), so callers that ask for
 
 `all_tools` exposes every available provider tool, `one_provider` exposes one
 provider's tools, and `router` exposes one `search` tool that runs the chosen
-provider's first tool, defaulting to the search role's first usable provider.
+provider's first tool with Search role normalization, defaulting to the search
+role's first usable provider.
 
 ## Errors
 

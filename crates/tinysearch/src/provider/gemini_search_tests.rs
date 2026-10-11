@@ -492,7 +492,11 @@ async fn gemini_router_respects_configured_result_limit() -> crate::Result<()> {
     let mut config = config(&server, &["gemini"]);
     config.providers.remove("exa");
     config.presentation.mode = crate::PresentationMode::Router;
-    config.providers.get_mut("gemini").unwrap().max_results = Some(2);
+    config
+        .providers
+        .get_mut("gemini")
+        .ok_or_else(|| Error::UnavailableProvider("gemini".into()))?
+        .max_results = Some(2);
     let response = SearchService::with_providers(config, builtins())
         .execute_tool(ExecuteToolRequest {
             name: "search".into(),

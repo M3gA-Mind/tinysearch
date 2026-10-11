@@ -166,22 +166,19 @@ async fn router_defaults_to_the_first_search_role_provider() -> crate::Result<()
 }
 #[tokio::test]
 async fn router_never_dispatches_search_to_a_non_search_provider() {
-    // `gemini` only serves `Role::Answer`. With no Search-role provider
-    // configured, Router must refuse "search" rather than fall back to
-    // gemini's Answer tool (see `execute_router`'s provider selection and the
-    // matching `PresentationMode::Router` catalog guard).
+    // Deep Research remains Answer-only. A direct credential must not
+    // advertise it as a Search provider in Router mode.
     let mut config = SearchConfig::default();
     config.presentation.mode = PresentationMode::Router;
-    config.backend.credential = Some("test-key".into());
     config.providers.insert(
-        "gemini".into(),
+        "gemini_deep_research".into(),
         ProviderConfig {
-            route: ProviderRoute::Backend,
+            credential: Some("test-key".into()),
             ..ProviderConfig::default()
         },
     );
     let providers: BTreeMap<String, Arc<dyn SearchProvider>> = [(
-        "gemini".into(),
+        "gemini_deep_research".into(),
         Arc::new(MockProvider) as Arc<dyn SearchProvider>,
     )]
     .into();

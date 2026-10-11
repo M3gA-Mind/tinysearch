@@ -145,7 +145,7 @@ async fn direct_exa_success_does_not_call_gemini() -> crate::Result<()> {
         .execute_tool(search(json!({"query":"fixture query"})))
         .await?;
     assert_eq!(response.provider, "exa");
-    assert!(response.fallback_from.is_empty());
+    assert_eq!(response.fallback_from.len(), 0);
     assert_eq!(
         server.received_requests().await.unwrap_or_default().len(),
         1
@@ -177,7 +177,7 @@ async fn forced_search_provider_never_falls_back() -> crate::Result<()> {
         .execute_tool(search(json!({"query":"fixture query","provider":"gemini"})))
         .await?;
     assert_eq!(response.provider, "gemini");
-    assert!(response.fallback_from.is_empty());
+    assert_eq!(response.fallback_from.len(), 0);
     Ok(())
 }
 
@@ -196,7 +196,7 @@ async fn missing_keys_are_removed_from_search_candidates() -> crate::Result<()> 
         .execute_tool(search(json!({"query":"fixture query"})))
         .await?;
     assert_eq!(response.provider, "gemini");
-    assert!(response.fallback_from.is_empty());
+    assert_eq!(response.fallback_from.len(), 0);
     config
         .providers
         .get_mut("gemini")
@@ -237,8 +237,8 @@ async fn search_without_usable_grounding_returns_empty_even_with_answer_text() -
             .execute_tool(search(json!({"query":"fixture query"})))
             .await?;
         assert_eq!(response.status, SearchStatus::Empty);
-        assert!(response.results.is_empty());
-        assert!(response.citations.is_empty());
+        assert_eq!(response.results.len(), 0);
+        assert_eq!(response.citations.len(), 0);
         assert_eq!(response.answer, None);
     }
     Ok(())
@@ -274,7 +274,7 @@ async fn gemini_search_limits_results_and_preserves_answer_behavior() -> crate::
         })
         .await?;
     assert_eq!(response.answer.as_deref(), Some("A grounded answer."));
-    assert!(response.results.is_empty());
+    assert_eq!(response.results.len(), 0);
     assert_eq!(response.citations.len(), 3);
     assert_eq!(response.role, Some(Role::Answer));
     Ok(())
@@ -299,4 +299,85 @@ async fn gemini_search_failure_keeps_provider_error_classification() {
             _ => matches!(error, Err(Error::ProviderUnavailable(_))),
         });
     }
+}
+
+#[test]
+fn search_grounding_ignores_invalid_chunks_and_bounds_output_and_input() {
+    let mut chunks = vec![
+        json!({}),
+        json!({"web":{"uri":"https://user:password@host.test"}}),
+        json!({"web":{"uri":format!("https://long.test/{}", "x".repeat(2048))}}),
+    ];
+    chunks.extend((0..25).map(
+        |i| json!({"web":{"uri":format!("https://source{i}.test"),"title":"界".repeat(301)}}),
+    ));
+    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+        "groundingChunks":chunks,"groundingSupports":[
+            {"groundingChunkIndices":[null,-1,"not an index",100_000,0,1,2]},
+            {"segment":{"text":" 字 ".repeat(1000)},"groundingChunkIndices":[3,3]}
+        ]
+    }}]}));
+    assert_eq!(response.results.len(), 20);
+    assert_eq!(response.citations.len(), 20);
+    assert_eq!(response.results[0].url, "https://source0.test");
+    assert_eq!(response.results[0].title.chars().count(), 300);
+    assert_eq!(
+        response.results[0]
+            .snippet
+            .as_deref()
+            .map(|s| s.chars().count()),
+        Some(1200)
+    );
+    // Sources beyond the bounded input scan never become results.
+    let mut chunks = vec![json!({}); MAX_GROUNDING_CHUNKS];
+    chunks.push(json!({"web":{"uri":"https://outside.test"}}));
+    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+        "groundingChunks":chunks,"groundingSupports":[{"groundingChunkIndices":[MAX_GROUNDING_CHUNKS]}]
+    }}]}));
+    assert_eq!(response.status, SearchStatus::Empty);
+}
+
+#[test]
+fn search_grounding_without_metadata_or_support_text_is_well_formed() {
+    for value in [json!({}), json!({"candidates":[{"groundingMetadata":{}}]})] {
+        let response = gemini_search::normalize(&value);
+        assert_eq!(response.status, SearchStatus::Empty);
+        assert_eq!(response.answer, None);
+    }
+    let response = gemini_search::normalize(&json!({"candidates":[{"groundingMetadata":{
+        "groundingChunks":[{"web":{"uri":"https://bare.test"}}],
+        "groundingSupports":[{"segment":{"text":" "},"groundingChunkIndices":[0]}]
+    }}]}));
+    assert_eq!(response.results[0].title, "");
+    assert_eq!(response.results[0].snippet, None);
+}
+
+#[tokio::test]
+async fn configured_gemini_first_search_falls_back_to_exa_after_failure() -> crate::Result<()> {
+    let server = MockServer::start().await;
+    Mock::given(path(GEMINI_PATH))
+        .respond_with(ResponseTemplate::new(503))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(path("/search"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({"results":[{"url":"https://exa.test"}]})),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+    let service = SearchService::with_providers(config(&server, &["gemini", "exa"]), builtins());
+    let response = service
+        .execute_tool(search(json!({"query":"fixture query"})))
+        .await?;
+    assert_eq!(response.provider, "exa");
+    assert_eq!(response.fallback_from, ["gemini"]);
+    let requests = server.received_requests().await.unwrap_or_default();
+    assert_eq!(
+        requests.iter().map(|r| r.url.path()).collect::<Vec<_>>(),
+        [GEMINI_PATH, "/search"]
+    );
+    Ok(())
 }

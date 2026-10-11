@@ -513,7 +513,7 @@ async fn gemini_router_respects_configured_result_limit() -> crate::Result<()> {
 #[tokio::test]
 async fn gemini_router_honors_requested_result_limits_and_alias() -> crate::Result<()> {
     let server = MockServer::start().await;
-    gemini_mock(&server, grounding(), 3).await;
+    gemini_mock(&server, grounding(), 0).await;
     let mut config = config(&server, &["gemini"]);
     config.providers.remove("exa");
     config.presentation.mode = crate::PresentationMode::Router;

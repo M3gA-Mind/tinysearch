@@ -513,21 +513,27 @@ async fn gemini_router_respects_configured_result_limit() -> crate::Result<()> {
 #[tokio::test]
 async fn gemini_router_honors_requested_result_limits_and_alias() -> crate::Result<()> {
     let server = MockServer::start().await;
-    gemini_mock(&server, grounding(), 0).await;
+    gemini_mock(&server, grounding(), 3).await;
     let mut config = config(&server, &["gemini"]);
     config.providers.remove("exa");
     config.presentation.mode = crate::PresentationMode::Router;
-    config.providers.get_mut("gemini")
-        .ok_or_else(|| Error::UnavailableProvider("gemini".into()))?.max_results = Some(2);
+    config
+        .providers
+        .get_mut("gemini")
+        .ok_or_else(|| Error::UnavailableProvider("gemini".into()))?
+        .max_results = Some(2);
     let service = SearchService::with_providers(config, builtins());
     for arguments in [
         json!({"query":"fixture query","max_results":1}),
         json!({"query":"fixture query","limit":1}),
         json!({"query":"fixture query","max_results":1,"limit":3}),
     ] {
-        let response = service.execute_tool(ExecuteToolRequest {
-            name: "search".into(), arguments,
-        }).await?;
+        let response = service
+            .execute_tool(ExecuteToolRequest {
+                name: "search".into(),
+                arguments,
+            })
+            .await?;
         assert_eq!(response.results.len(), 1);
         assert_eq!(response.citations.len(), 1);
         assert_eq!(response.results[0].url, "https://second.test");
@@ -542,21 +548,39 @@ async fn gemini_router_keeps_native_extra_and_limit_validation() -> crate::Resul
     config.providers.remove("exa");
     config.presentation.mode = crate::PresentationMode::Router;
     let service = SearchService::with_providers(config, builtins());
-    let unsupported = service.execute_tool(ExecuteToolRequest {
-        name: "search".into(),
-        arguments: json!({"query":"fixture query","max_results":1,"unexpected":true}),
-    }).await;
-    assert_eq!(unsupported.err(), Some(Error::UnsupportedArgument("unexpected".into())));
+    let unsupported = service
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments: json!({"query":"fixture query","max_results":1,"unexpected":true}),
+        })
+        .await;
+    assert_eq!(
+        unsupported.err(),
+        Some(Error::UnsupportedArgument("unexpected".into()))
+    );
     for arguments in [
         json!({"query":"fixture query","max_results":0}),
         json!({"query":"fixture query","limit":21}),
         json!({"query":"fixture query","max_results":"1"}),
         json!({"query":"fixture query","max_results":1,"limit":false}),
     ] {
-        assert_eq!(service.execute_tool(ExecuteToolRequest {
-            name: "search".into(), arguments,
-        }).await.err(), Some(Error::InvalidArguments));
+        assert_eq!(
+            service
+                .execute_tool(ExecuteToolRequest {
+                    name: "search".into(),
+                    arguments,
+                })
+                .await
+                .err(),
+            Some(Error::InvalidArguments)
+        );
     }
-    assert!(server.received_requests().await.unwrap_or_default().is_empty());
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap_or_default()
+            .is_empty()
+    );
     Ok(())
 }

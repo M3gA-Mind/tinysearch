@@ -148,18 +148,34 @@ impl SearchService {
             .cloned()
             .ok_or_else(|| Error::UnavailableProvider(selected.clone()))?;
         let mut provider_request = request;
+        let mut requested_count = None;
         if let Some(values) = provider_request.arguments.as_object_mut() {
             values.remove("provider");
+            if selected == "gemini" {
+                // These Search options bound normalized output, rather than
+                // belonging to the native Gemini query/model request schema.
+                for field in ["max_results", "limit"] {
+                    if let Some(value) = values.get(field)
+                        && !value
+                            .as_u64()
+                            .is_some_and(|count| (1..=20).contains(&count))
+                    {
+                        return Err(Error::InvalidArguments);
+                    }
+                }
+                requested_count = values
+                    .remove("max_results")
+                    .or_else(|| values.get("limit").cloned())
+                    .and_then(|value| value.as_u64());
+                values.remove("limit");
+            }
         }
         let mut response = self
             .dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
             .await?;
         if selected == "gemini" {
-            let count = self
-                .config
-                .providers
-                .get(&selected)
-                .and_then(|config| config.max_results)
+            let count = requested_count
+                .or_else(|| self.config.providers.get(&selected)?.max_results)
                 .unwrap_or(20)
                 .clamp(1, 20);
             let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;

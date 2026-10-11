@@ -101,8 +101,8 @@ and matching citations honor `max_results` (or `limit`), then the provider's
 configured count, up to 20. Search returns `empty` when grounding contains no
 usable web links, even if Gemini generated answer text. Answer and the raw
 `gemini_agentic_search` tool retain their synthesized answer and citations.
-`gemini_deep_research` remains Answer-only and calls the direct asynchronous Interactions API; it can
-be resumed with `interaction_id` when the bounded poll returns `in_progress`.
+`gemini_deep_research` remains Answer-only and calls the direct asynchronous
+Interactions API; it can be resumed with `interaction_id` when the bounded poll returns `in_progress`.
 Direct Google calls never receive backend attribution or credentials.
 
 TinyFish is bring-your-own-key only (the managed backend does not proxy it).

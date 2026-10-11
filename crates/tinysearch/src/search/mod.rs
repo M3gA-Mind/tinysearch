@@ -151,7 +151,7 @@ impl SearchService {
         if let Some(values) = provider_request.arguments.as_object_mut() {
             values.remove("provider");
         }
-        self.dispatch(&selected, &first_tool, provider_request, None)
+        self.dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
             .await
     }
 

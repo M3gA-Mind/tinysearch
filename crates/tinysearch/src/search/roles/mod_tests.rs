@@ -236,6 +236,7 @@ async fn exhausted_fallbacks_return_the_last_error() {
             ("brave", broke),
             ("tavily", broke),
             ("tinyfish", throttled),
+            ("gemini", throttled),
         ],
         |_| {},
     );
@@ -783,6 +784,7 @@ async fn a_rejected_credential_outranks_a_later_unavailable_provider() {
             ("brave", down),
             ("tavily", throttled),
             ("tinyfish", down),
+            ("gemini", down),
         ],
         |_| {},
     );

@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, future::Future, pin::Pin, sync::Arc};
 use tinysearch_bus::{
     BackendConfig, ExecuteToolRequest, ExecuteToolResponse, ListToolsResponse, PresentationMode,
     ProviderConfig, Role, SearchConfig, ToolSpec, configured_provider_tools, provider_tool_specs,
-    role_providers, select_tools,
+    role_provider_tool, role_providers, select_tools,
 };
 
 mod roles;
@@ -22,6 +22,21 @@ pub trait SearchProvider: Send + Sync {
         backend: &'a BackendConfig,
         request: &'a ExecuteToolRequest,
     ) -> ProviderFuture<'a>;
+
+    /// Executes a provider tool for a capability role.
+    ///
+    /// Providers may shape the same tool's output differently for Search and
+    /// Answer. The default preserves implementations that serve one response
+    /// form for all roles.
+    fn execute_role<'a>(
+        &'a self,
+        config: &'a ProviderConfig,
+        backend: &'a BackendConfig,
+        request: &'a ExecuteToolRequest,
+        _role: Role,
+    ) -> ProviderFuture<'a> {
+        self.execute(config, backend, request)
+    }
 }
 
 /// Provider-independent `TinySearch` service.
@@ -95,11 +110,14 @@ impl SearchService {
                             .map(|tool| (name.clone(), tool.clone()))
                     })
                     .ok_or_else(|| Error::UnavailableTool(request.name.clone()))?;
-                self.dispatch(&provider, &tool, request).await
+                self.dispatch(&provider, &tool, request, None).await
             }
         }
     }
 
+    /// Routes Search only to eligible providers, retaining their native options.
+    ///
+    /// Gemini's generic count options bound normalized results locally.
     async fn execute_router(
         &self,
         available: &BTreeMap<String, Vec<ToolSpec>>,
@@ -127,17 +145,64 @@ impl SearchService {
                     .next()
             })
             .ok_or(Error::MissingProvider)?;
-        let first_tool = available
-            .get(&selected)
-            .and_then(|tools| tools.first())
+        // Explicit and configured Router choices override fallback order.
+        // Eligibility still requires the selected provider's Search tool.
+        let first_tool = role_provider_tool(Role::Search, &selected)
+            .and_then(|name| {
+                available
+                    .get(&selected)?
+                    .iter()
+                    .find(|tool| tool.name == name)
+            })
             .cloned()
             .ok_or_else(|| Error::UnavailableProvider(selected.clone()))?;
         let mut provider_request = request;
+        let mut requested_count = None;
         if let Some(values) = provider_request.arguments.as_object_mut() {
             values.remove("provider");
+            if selected == "gemini" {
+                // These Search options bound normalized output, rather than
+                // belonging to the native Gemini query/model request schema.
+                for field in ["max_results", "limit"] {
+                    if let Some(value) = values.get(field)
+                        && !value
+                            .as_u64()
+                            .is_some_and(|count| (1..=20).contains(&count))
+                    {
+                        return Err(Error::InvalidArguments);
+                    }
+                }
+                requested_count = values
+                    .remove("max_results")
+                    .or_else(|| values.get("limit").cloned())
+                    .and_then(|value| value.as_u64());
+                values.remove("limit");
+            }
         }
-        self.dispatch(&selected, &first_tool, provider_request)
-            .await
+        let mut response = self
+            .dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
+            .await?;
+        if selected == "gemini" {
+            self.bound_gemini_search(requested_count, &mut response)?;
+        }
+        Ok(response)
+    }
+
+    /// Bounds aligned Gemini Search results and citations using the request,
+    /// then configured maximum, then 20, with a common 1–20 ceiling.
+    fn bound_gemini_search(
+        &self,
+        requested: Option<u64>,
+        response: &mut ExecuteToolResponse,
+    ) -> Result<()> {
+        let count = requested
+            .or_else(|| self.config.providers.get("gemini")?.max_results)
+            .unwrap_or(20)
+            .clamp(1, 20);
+        let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
+        response.results.truncate(count);
+        response.citations.truncate(count);
+        Ok(())
     }
 
     /// Validates `request` against a provider tool and runs it on `provider`.
@@ -146,6 +211,7 @@ impl SearchService {
         provider_name: &str,
         tool: &ToolSpec,
         mut request: ExecuteToolRequest,
+        role: Option<Role>,
     ) -> Result<ExecuteToolResponse> {
         let provider = self
             .providers
@@ -159,9 +225,11 @@ impl SearchService {
             .unwrap_or_default();
         request.name.clone_from(&tool.name);
         validate_arguments(tool, &request.arguments)?;
-        let mut response = provider
-            .execute(&config, &self.config.backend, &request)
-            .await?;
+        let mut response = match role {
+            Some(role) => provider.execute_role(&config, &self.config.backend, &request, role),
+            None => provider.execute(&config, &self.config.backend, &request),
+        }
+        .await?;
         provider_name.clone_into(&mut response.provider);
         Ok(response)
     }

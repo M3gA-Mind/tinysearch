@@ -166,22 +166,19 @@ async fn router_defaults_to_the_first_search_role_provider() -> crate::Result<()
 }
 #[tokio::test]
 async fn router_never_dispatches_search_to_a_non_search_provider() {
-    // `gemini` only serves `Role::Answer`. With no Search-role provider
-    // configured, Router must refuse "search" rather than fall back to
-    // gemini's Answer tool (see `execute_router`'s provider selection and the
-    // matching `PresentationMode::Router` catalog guard).
+    // Deep Research remains Answer-only. A direct credential must not
+    // advertise it as a Search provider in Router mode.
     let mut config = SearchConfig::default();
     config.presentation.mode = PresentationMode::Router;
-    config.backend.credential = Some("test-key".into());
     config.providers.insert(
-        "gemini".into(),
+        "gemini_deep_research".into(),
         ProviderConfig {
-            route: ProviderRoute::Backend,
+            credential: Some("test-key".into()),
             ..ProviderConfig::default()
         },
     );
     let providers: BTreeMap<String, Arc<dyn SearchProvider>> = [(
-        "gemini".into(),
+        "gemini_deep_research".into(),
         Arc::new(MockProvider) as Arc<dyn SearchProvider>,
     )]
     .into();
@@ -471,4 +468,105 @@ async fn service_rejects_disabled_and_unknown_router_target() {
             .err(),
         Some(Error::UnavailableProvider("missing".into()))
     );
+}
+
+#[tokio::test]
+async fn router_rejects_answer_only_provider_in_mixed_configuration() {
+    for explicit in [false, true] {
+        let mut config = SearchConfig::default();
+        config.presentation.mode = PresentationMode::Router;
+        if !explicit {
+            config.presentation.provider = Some("gemini_deep_research".into());
+        }
+        for name in ["gemini", "gemini_deep_research"] {
+            config.providers.insert(
+                name.into(),
+                ProviderConfig {
+                    credential: Some("test-key".into()),
+                    ..ProviderConfig::default()
+                },
+            );
+        }
+        let providers: BTreeMap<String, Arc<dyn SearchProvider>> =
+            ["gemini", "gemini_deep_research"]
+                .into_iter()
+                .map(|name| {
+                    (
+                        name.into(),
+                        Arc::new(MockProvider) as Arc<dyn SearchProvider>,
+                    )
+                })
+                .collect();
+        let service = SearchService::with_providers(config, providers);
+        assert_eq!(service.list_tools().tools.len(), 1);
+        let arguments = if explicit {
+            json!({"query":"fixture query","provider":"gemini_deep_research"})
+        } else {
+            json!({"query":"fixture query"})
+        };
+        assert_eq!(
+            service
+                .execute_tool(ExecuteToolRequest {
+                    name: "search".into(),
+                    arguments,
+                })
+                .await
+                .err(),
+            Some(Error::UnavailableProvider("gemini_deep_research".into()))
+        );
+    }
+}
+
+#[tokio::test]
+async fn router_explicit_search_provider_overrides_role_fallback_order() -> crate::Result<()> {
+    router_omitted_order_provider(true).await
+}
+
+#[tokio::test]
+async fn router_configured_search_provider_overrides_role_fallback_order() -> crate::Result<()> {
+    router_omitted_order_provider(false).await
+}
+
+/// Keeps both providers usable while excluding the selected one from fallback order.
+async fn router_omitted_order_provider(explicit: bool) -> crate::Result<()> {
+    let mut config = SearchConfig::default();
+    config.presentation.mode = PresentationMode::Router;
+    config
+        .presentation
+        .roles
+        .insert(Role::Search, vec!["gemini".into()]);
+    if !explicit {
+        config.presentation.provider = Some("exa".into());
+    }
+    for name in ["gemini", "exa"] {
+        config.providers.insert(
+            name.into(),
+            ProviderConfig {
+                credential: Some("test-key".into()),
+                ..ProviderConfig::default()
+            },
+        );
+    }
+    let providers: BTreeMap<String, Arc<dyn SearchProvider>> = ["gemini", "exa"]
+        .into_iter()
+        .map(|name| {
+            (
+                name.into(),
+                Arc::new(MockProvider) as Arc<dyn SearchProvider>,
+            )
+        })
+        .collect();
+    let arguments = if explicit {
+        json!({"query":"fixture query","provider":"exa"})
+    } else {
+        json!({"query":"fixture query"})
+    };
+    let response = SearchService::with_providers(config, providers)
+        .execute_tool(ExecuteToolRequest {
+            name: "search".into(),
+            arguments,
+        })
+        .await?;
+    assert_eq!(response.provider, "exa");
+    Ok(())
 }

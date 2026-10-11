@@ -78,8 +78,14 @@ impl SearchService {
                 name: tool.name.clone(),
                 arguments: provider_arguments(role, &provider, args, &tool),
             };
-            match self.dispatch(&provider, &tool, provider_request).await {
+            match self
+                .dispatch(&provider, &tool, provider_request, Some(role))
+                .await
+            {
                 Ok(mut response) => {
+                    if role == Role::Search && provider == "gemini" {
+                        self.bound_gemini_search(result_count(args).as_u64(), &mut response)?;
+                    }
                     response.role = Some(role);
                     response.fallback_from = failed;
                     return Ok(response);

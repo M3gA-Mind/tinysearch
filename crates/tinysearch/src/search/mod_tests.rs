@@ -469,3 +469,33 @@ async fn service_rejects_disabled_and_unknown_router_target() {
         Some(Error::UnavailableProvider("missing".into()))
     );
 }
+
+#[tokio::test]
+async fn router_rejects_answer_only_provider_in_mixed_configuration() {
+    for explicit in [false, true] {
+        let mut config = SearchConfig::default();
+        config.presentation.mode = PresentationMode::Router;
+        if !explicit {
+            config.presentation.provider = Some("gemini_deep_research".into());
+        }
+        for name in ["gemini", "gemini_deep_research"] {
+            config.providers.insert(name.into(), ProviderConfig {
+                credential: Some("test-key".into()), ..ProviderConfig::default()
+            });
+        }
+        let providers: BTreeMap<String, Arc<dyn SearchProvider>> =
+            ["gemini", "gemini_deep_research"].into_iter()
+                .map(|name| (name.into(), Arc::new(MockProvider) as Arc<dyn SearchProvider>))
+                .collect();
+        let service = SearchService::with_providers(config, providers);
+        assert_eq!(service.list_tools().tools.len(), 1);
+        let arguments = if explicit {
+            json!({"query":"fixture query","provider":"gemini_deep_research"})
+        } else {
+            json!({"query":"fixture query"})
+        };
+        assert_eq!(service.execute_tool(ExecuteToolRequest {
+            name: "search".into(), arguments,
+        }).await.err(), Some(Error::UnavailableProvider("gemini_deep_research".into())));
+    }
+}

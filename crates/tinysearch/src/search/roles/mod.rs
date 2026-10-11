@@ -78,8 +78,21 @@ impl SearchService {
                 name: tool.name.clone(),
                 arguments: provider_arguments(role, &provider, args, &tool),
             };
-            match self.dispatch(&provider, &tool, provider_request).await {
+            match self
+                .dispatch(&provider, &tool, provider_request, Some(role))
+                .await
+            {
                 Ok(mut response) => {
+                    if role == Role::Search && provider == "gemini" {
+                        let count = result_count(args)
+                            .as_u64()
+                            .or_else(|| self.config.providers.get(&provider)?.max_results)
+                            .unwrap_or(20)
+                            .clamp(1, 20);
+                        let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
+                        response.results.truncate(count);
+                        response.citations.truncate(count);
+                    }
                     response.role = Some(role);
                     response.fallback_from = failed;
                     return Ok(response);

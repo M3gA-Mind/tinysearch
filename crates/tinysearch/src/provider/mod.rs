@@ -1,7 +1,7 @@
 //! Built-in HTTP providers and bounded result normalization.
 use crate::{
     BackendAuthMode, BackendConfig, Error, ExecuteToolRequest, ExecuteToolResponse, ProviderConfig,
-    ProviderFuture, ProviderRoute, Result, SearchProvider, SearchStatus,
+    ProviderFuture, ProviderRoute, Result, Role, SearchProvider, SearchStatus,
 };
 use reqwest::{Client, Method};
 use serde_json::{Map, Value, json};
@@ -54,7 +54,17 @@ impl SearchProvider for BuiltinProvider {
         backend: &'a BackendConfig,
         request: &'a ExecuteToolRequest,
     ) -> ProviderFuture<'a> {
-        Box::pin(async move { self.run(config, backend, request).await })
+        Box::pin(async move { self.run(config, backend, request, None).await })
+    }
+
+    fn execute_role<'a>(
+        &'a self,
+        config: &'a ProviderConfig,
+        backend: &'a BackendConfig,
+        request: &'a ExecuteToolRequest,
+        role: Role,
+    ) -> ProviderFuture<'a> {
+        Box::pin(async move { self.run(config, backend, request, Some(role)).await })
     }
 }
 
@@ -64,6 +74,7 @@ impl BuiltinProvider {
         config: &ProviderConfig,
         backend: &BackendConfig,
         request: &ExecuteToolRequest,
+        role: Option<Role>,
     ) -> Result<ExecuteToolResponse> {
         // A key counts only if this provider's request carries one. SearXNG
         // never sends `credential`, so a stray value in its config must not
@@ -73,7 +84,7 @@ impl BuiltinProvider {
                 .credential
                 .as_deref()
                 .is_some_and(|key| !key.trim().is_empty());
-        self.run_unattributed(config, backend, request)
+        self.run_unattributed(config, backend, request, role)
             .await
             .map_err(|error| error.attributed_to(self.name, keyed))
     }
@@ -86,6 +97,7 @@ impl BuiltinProvider {
         config: &ProviderConfig,
         backend: &BackendConfig,
         request: &ExecuteToolRequest,
+        role: Option<Role>,
     ) -> Result<ExecuteToolResponse> {
         let (path, body) = match self.name {
             "exa" if config.route == ProviderRoute::Backend => exa_request(request)?,
@@ -93,7 +105,7 @@ impl BuiltinProvider {
             | "tinyfish" | "keenable" => {
                 return direct::run(&self.client, self.name, config, request).await;
             }
-            "gemini" => return self.gemini(config, backend, request).await,
+            "gemini" => return self.gemini(config, backend, request, role).await,
             "gemini_deep_research" => return self.deep_research(config, request).await,
             _ => return Err(Error::UnavailableProvider(self.name.into())),
         };
@@ -130,6 +142,7 @@ impl BuiltinProvider {
         config: &ProviderConfig,
         backend: &BackendConfig,
         request: &ExecuteToolRequest,
+        role: Option<Role>,
     ) -> Result<ExecuteToolResponse> {
         if request.name != "gemini_agentic_search" {
             return Err(Error::UnavailableTool(request.name.clone()));
@@ -189,7 +202,11 @@ impl BuiltinProvider {
         } else {
             value
         };
-        Ok(normalize("gemini", &request.name, &value))
+        Ok(if role == Some(Role::Search) {
+            gemini_search::normalize(&value)
+        } else {
+            normalize("gemini", &request.name, &value)
+        })
     }
 
     async fn deep_research(
@@ -440,6 +457,7 @@ fn exa_request(request: &ExecuteToolRequest) -> Result<(String, Value)> {
 }
 
 mod direct;
+mod gemini_search;
 mod http;
 mod normalize;
 use normalize::normalize;

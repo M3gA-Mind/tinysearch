@@ -22,6 +22,21 @@ pub trait SearchProvider: Send + Sync {
         backend: &'a BackendConfig,
         request: &'a ExecuteToolRequest,
     ) -> ProviderFuture<'a>;
+
+    /// Executes a provider tool for a capability role.
+    ///
+    /// Providers may shape the same tool's output differently for Search and
+    /// Answer. The default preserves implementations that serve one response
+    /// form for all roles.
+    fn execute_role<'a>(
+        &'a self,
+        config: &'a ProviderConfig,
+        backend: &'a BackendConfig,
+        request: &'a ExecuteToolRequest,
+        _role: Role,
+    ) -> ProviderFuture<'a> {
+        self.execute(config, backend, request)
+    }
 }
 
 /// Provider-independent `TinySearch` service.
@@ -95,7 +110,7 @@ impl SearchService {
                             .map(|tool| (name.clone(), tool.clone()))
                     })
                     .ok_or_else(|| Error::UnavailableTool(request.name.clone()))?;
-                self.dispatch(&provider, &tool, request).await
+                self.dispatch(&provider, &tool, request, None).await
             }
         }
     }
@@ -136,7 +151,7 @@ impl SearchService {
         if let Some(values) = provider_request.arguments.as_object_mut() {
             values.remove("provider");
         }
-        self.dispatch(&selected, &first_tool, provider_request)
+        self.dispatch(&selected, &first_tool, provider_request, None)
             .await
     }
 
@@ -146,6 +161,7 @@ impl SearchService {
         provider_name: &str,
         tool: &ToolSpec,
         mut request: ExecuteToolRequest,
+        role: Option<Role>,
     ) -> Result<ExecuteToolResponse> {
         let provider = self
             .providers
@@ -159,9 +175,11 @@ impl SearchService {
             .unwrap_or_default();
         request.name.clone_from(&tool.name);
         validate_arguments(tool, &request.arguments)?;
-        let mut response = provider
-            .execute(&config, &self.config.backend, &request)
-            .await?;
+        let mut response = match role {
+            Some(role) => provider.execute_role(&config, &self.config.backend, &request, role),
+            None => provider.execute(&config, &self.config.backend, &request),
+        }
+        .await?;
         provider_name.clone_into(&mut response.provider);
         Ok(response)
     }

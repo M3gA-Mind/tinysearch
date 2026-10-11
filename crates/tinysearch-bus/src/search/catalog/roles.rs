@@ -13,7 +13,8 @@ pub(crate) const DEEP_RESEARCH: &str = "gemini_deep_research";
 pub fn provider_roles(provider: &str) -> &'static [Role] {
     match provider {
         "exa" | "parallel" => &[Role::Search, Role::Answer, Role::Contents],
-        "gemini" | "gemini_deep_research" => &[Role::Answer],
+        "gemini" => &[Role::Search, Role::Answer],
+        "gemini_deep_research" => &[Role::Answer],
         "tinyfish" | "tavily" | "keenable" => &[Role::Search, Role::Contents],
         "brave" | "querit" | "seltz" | "searxng" => &[Role::Search],
         _ => &[],
@@ -26,7 +27,7 @@ pub fn default_role_providers(role: Role) -> &'static [&'static str] {
     match role {
         Role::Search => &[
             "exa", "brave", "tavily", "parallel", "querit", "seltz", "searxng", "tinyfish",
-            "keenable",
+            "keenable", "gemini",
         ],
         Role::Answer => &["gemini", "gemini_deep_research", "exa", "parallel"],
         Role::Contents => &["exa", "tavily", "parallel", "tinyfish", "keenable"],
@@ -38,6 +39,7 @@ pub fn default_role_providers(role: Role) -> &'static [&'static str] {
 pub fn role_provider_tool(role: Role, provider: &str) -> Option<&'static str> {
     Some(match (role, provider) {
         (Role::Search, "exa") => "exa_search",
+        (Role::Search, "gemini") => "gemini_agentic_search",
         (Role::Search, "brave") => "brave_web_search",
         (Role::Search, "tavily") => "tavily_search",
         (Role::Search, "querit") => "querit_search",

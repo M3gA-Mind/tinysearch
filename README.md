@@ -18,7 +18,7 @@ role that has at least one usable provider:
 
 | Role | Tool | Arguments | Providers (default order) |
 | --- | --- | --- | --- |
-| `search` | `web_search_tool` | `query`, `max_results?` (1-20), `provider?` | exa, brave, tavily, parallel, querit, seltz, searxng, tinyfish, keenable |
+| `search` | `web_search_tool` | `query`, `max_results?` (1-20), `provider?` | exa, brave, tavily, parallel, querit, seltz, searxng, tinyfish, keenable, gemini |
 | `answer` | `web_answer_tool` | `query`, `depth?` (`quick` or `deep`), `provider?` | gemini, gemini_deep_research, exa, parallel |
 | `contents` | `web_contents_tool` | `urls` (1-10), `query?`, `provider?` | exa, tavily, parallel, tinyfish, keenable |
 
@@ -94,7 +94,14 @@ grounding: directly with `x-goog-api-key`, or through
 limits `model` to the backend's allowlist (default `gemini-3.8-flash`). The
 answer joins the candidate's text parts, and citations list the grounding
 chunks that `groundingSupports` reference first, then the rest.
-`gemini_deep_research` calls the direct asynchronous Interactions API; it can
+For the Search role, the same grounded call returns deduplicated HTTP(S)
+result links in grounding-support order, with the supporting text as snippets
+when available. Unreferenced web chunks follow in their original order. Results
+and matching citations honor `max_results` (or `limit`), then the provider's
+configured count, up to 20. Search returns `empty` when grounding contains no
+usable web links, even if Gemini generated answer text. Answer and the raw
+`gemini_agentic_search` tool retain their synthesized answer and citations.
+`gemini_deep_research` remains Answer-only and calls the direct asynchronous Interactions API; it can
 be resumed with `interaction_id` when the bounded poll returns `in_progress`.
 Direct Google calls never receive backend attribution or credentials.
 

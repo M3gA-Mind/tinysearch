@@ -143,7 +143,10 @@ fn provider_roles_and_defaults_match_the_contract() {
     );
     assert_eq!(provider_roles("unknown").len(), 0);
     assert_eq!(provider_roles("gemini"), [Role::Search, Role::Answer]);
-    assert_eq!(role_provider_tool(Role::Search, "gemini"), Some("gemini_agentic_search"));
+    assert_eq!(
+        role_provider_tool(Role::Search, "gemini"),
+        Some("gemini_agentic_search")
+    );
     assert_eq!(provider_roles("gemini_deep_research"), [Role::Answer]);
     assert_eq!(provider_roles("tinyfish"), [Role::Search, Role::Contents]);
     assert_eq!(provider_roles("tavily"), [Role::Search, Role::Contents]);
@@ -188,7 +191,8 @@ fn provider_roles_and_defaults_match_the_contract() {
             "tavily",
             "seltz",
             "searxng",
-            "keenable", "gemini"
+            "keenable",
+            "gemini"
         ]
     );
     // The TinyHumans backend does not proxy TinyFish: it is own-key only.

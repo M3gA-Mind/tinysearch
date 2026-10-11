@@ -479,13 +479,23 @@ async fn router_rejects_answer_only_provider_in_mixed_configuration() {
             config.presentation.provider = Some("gemini_deep_research".into());
         }
         for name in ["gemini", "gemini_deep_research"] {
-            config.providers.insert(name.into(), ProviderConfig {
-                credential: Some("test-key".into()), ..ProviderConfig::default()
-            });
+            config.providers.insert(
+                name.into(),
+                ProviderConfig {
+                    credential: Some("test-key".into()),
+                    ..ProviderConfig::default()
+                },
+            );
         }
         let providers: BTreeMap<String, Arc<dyn SearchProvider>> =
-            ["gemini", "gemini_deep_research"].into_iter()
-                .map(|name| (name.into(), Arc::new(MockProvider) as Arc<dyn SearchProvider>))
+            ["gemini", "gemini_deep_research"]
+                .into_iter()
+                .map(|name| {
+                    (
+                        name.into(),
+                        Arc::new(MockProvider) as Arc<dyn SearchProvider>,
+                    )
+                })
                 .collect();
         let service = SearchService::with_providers(config, providers);
         assert_eq!(service.list_tools().tools.len(), 1);
@@ -494,8 +504,15 @@ async fn router_rejects_answer_only_provider_in_mixed_configuration() {
         } else {
             json!({"query":"fixture query"})
         };
-        assert_eq!(service.execute_tool(ExecuteToolRequest {
-            name: "search".into(), arguments,
-        }).await.err(), Some(Error::UnavailableProvider("gemini_deep_research".into())));
+        assert_eq!(
+            service
+                .execute_tool(ExecuteToolRequest {
+                    name: "search".into(),
+                    arguments,
+                })
+                .await
+                .err(),
+            Some(Error::UnavailableProvider("gemini_deep_research".into()))
+        );
     }
 }

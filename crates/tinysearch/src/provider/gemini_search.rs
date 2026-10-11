@@ -4,6 +4,7 @@ use crate::{Citation, ExecuteToolResponse, SearchResult, SearchStatus};
 use serde_json::Value;
 use std::collections::HashSet;
 
+/// Converts first-candidate grounding into ranked Search links without answer text.
 pub(super) fn normalize(value: &Value) -> ExecuteToolResponse {
     let mut response = super::normalize("gemini", "gemini_agentic_search", value);
     response.answer = None;
@@ -18,6 +19,8 @@ pub(super) fn normalize(value: &Value) -> ExecuteToolResponse {
     response
 }
 
+/// Adds referenced chunks first, then other valid chunks, deduplicating URLs
+/// and retaining matching citations within the bounded scan and output sizes.
 fn add_results(response: &mut ExecuteToolResponse, value: &Value) {
     let Some(metadata) = value.pointer("/candidates/0/groundingMetadata") else {
         return;
@@ -84,6 +87,7 @@ fn add_results(response: &mut ExecuteToolResponse, value: &Value) {
     }
 }
 
+/// Accepts bounded HTTP(S) source URLs with a host and no embedded credentials.
 fn usable_url(url: &str) -> bool {
     url.len() <= 2048
         && !url.chars().any(char::is_whitespace)

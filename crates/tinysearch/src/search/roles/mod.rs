@@ -84,14 +84,7 @@ impl SearchService {
             {
                 Ok(mut response) => {
                     if role == Role::Search && provider == "gemini" {
-                        let count = result_count(args)
-                            .as_u64()
-                            .or_else(|| self.config.providers.get(&provider)?.max_results)
-                            .unwrap_or(20)
-                            .clamp(1, 20);
-                        let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
-                        response.results.truncate(count);
-                        response.citations.truncate(count);
+                        self.bound_gemini_search(result_count(args).as_u64(), &mut response)?;
                     }
                     response.role = Some(role);
                     response.fallback_from = failed;

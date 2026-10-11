@@ -115,6 +115,9 @@ impl SearchService {
         }
     }
 
+    /// Routes Search only to eligible providers, retaining their native options.
+    ///
+    /// Gemini's generic count options bound normalized results locally.
     async fn execute_router(
         &self,
         available: &BTreeMap<String, Vec<ToolSpec>>,
@@ -142,6 +145,9 @@ impl SearchService {
                     .next()
             })
             .ok_or(Error::MissingProvider)?;
+        if !role_providers(available, &self.config.presentation, Role::Search).contains(&selected) {
+            return Err(Error::UnavailableProvider(selected));
+        }
         let first_tool = available
             .get(&selected)
             .and_then(|tools| tools.first())
@@ -174,15 +180,26 @@ impl SearchService {
             .dispatch(&selected, &first_tool, provider_request, Some(Role::Search))
             .await?;
         if selected == "gemini" {
-            let count = requested_count
-                .or_else(|| self.config.providers.get(&selected)?.max_results)
-                .unwrap_or(20)
-                .clamp(1, 20);
-            let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
-            response.results.truncate(count);
-            response.citations.truncate(count);
+            self.bound_gemini_search(requested_count, &mut response)?;
         }
         Ok(response)
+    }
+
+    /// Bounds aligned Gemini Search results and citations using the request,
+    /// then configured maximum, then 20, with a common 1–20 ceiling.
+    fn bound_gemini_search(
+        &self,
+        requested: Option<u64>,
+        response: &mut ExecuteToolResponse,
+    ) -> Result<()> {
+        let count = requested
+            .or_else(|| self.config.providers.get("gemini")?.max_results)
+            .unwrap_or(20)
+            .clamp(1, 20);
+        let count = usize::try_from(count).map_err(|_| Error::InvalidArguments)?;
+        response.results.truncate(count);
+        response.citations.truncate(count);
+        Ok(())
     }
 
     /// Validates `request` against a provider tool and runs it on `provider`.

@@ -12,6 +12,7 @@ use wiremock::{
 
 const GEMINI_PATH: &str = "/v1beta/models/gemini-3.8-flash:generateContent";
 
+/// Fixtures rank support-referenced chunks first and include a duplicate URL.
 fn grounding() -> Value {
     json!({"candidates":[{"content":{"parts":[{"text":"A grounded answer."}]},
     "groundingMetadata":{
@@ -28,6 +29,7 @@ fn grounding() -> Value {
     }}]})
 }
 
+/// Builds direct Exa/Gemini settings with an unrelated backend to detect proxy use.
 fn config(server: &MockServer, order: &[&str]) -> SearchConfig {
     let mut config = SearchConfig::default();
     config
@@ -50,6 +52,7 @@ fn config(server: &MockServer, order: &[&str]) -> SearchConfig {
     config
 }
 
+/// Creates a public Search-role request for the HTTP regression fixtures.
 fn search(arguments: Value) -> ExecuteToolRequest {
     ExecuteToolRequest {
         name: tools::WEB_SEARCH.into(),
@@ -57,6 +60,7 @@ fn search(arguments: Value) -> ExecuteToolRequest {
     }
 }
 
+/// Requires an exact direct Gemini request and the expected HTTP call count.
 async fn gemini_mock(server: &MockServer, value: Value, count: u64) {
     Mock::given(method("POST")).and(path(GEMINI_PATH))
         .and(header("x-goog-api-key", "gemini-key"))

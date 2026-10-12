@@ -63,9 +63,12 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
     // Cargo's `target/debug/deps` inherits runner ACLs on Windows and may be
     // writable by other users. TinyBus correctly refuses modules from there,
     // so stage the exact bytes and a matching pin in a private temp directory.
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .ok_or_else(|| io::Error::other("current user's home directory is unavailable"))?;
     let staged = tempfile::Builder::new()
         .prefix("tinysearch-module-e2e-")
-        .tempdir()?;
+        .tempdir_in(home)?;
     let staged_artifact = staged.path().join(
         artifact
             .file_name()

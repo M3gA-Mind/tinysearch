@@ -19,6 +19,14 @@ use wiremock::{
     matchers::{body_partial_json, method, path},
 };
 
+struct AbortOnDrop<T>(tokio::task::JoinHandle<T>);
+
+impl<T> Drop for AbortOnDrop<T> {
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 async fn mount_provider_fixtures(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/search"))
@@ -147,6 +155,7 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
     mount_provider_fixtures(&server).await;
 
     let (module_host, client, broker_task) = start_bus().await?;
+    let broker_task = AbortOnDrop(broker_task);
     let config = serde_json::json!({
         "providers": {
             "exa": {
@@ -207,6 +216,6 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
     );
     wait_until_idle(&module_host, "tinysearch", Duration::from_secs(5)).await?;
 
-    broker_task.abort();
+    drop(broker_task);
     Ok(())
 }

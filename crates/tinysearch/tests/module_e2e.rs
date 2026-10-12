@@ -55,9 +55,10 @@ async fn mount_provider_fixtures(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/search"))
         .and(body_partial_json(
-            serde_json::json!({"query": "fixture failure"}),
+            serde_json::json!({"query": "fixture mismatch"}),
         ))
         .respond_with(ResponseTemplate::new(503))
+        .expect(1)
         .mount(server)
         .await;
 }
@@ -251,6 +252,7 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         errors::code_of(&failed.to_string()),
         Some(errors::UNAVAILABLE)
     );
+    server.verify().await;
     wait_until_idle(&module_host, "tinysearch", Duration::from_secs(5)).await?;
 
     drop(broker_task);

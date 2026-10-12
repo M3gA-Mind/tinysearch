@@ -58,7 +58,7 @@ async fn mount_provider_fixtures(server: &MockServer) {
             serde_json::json!({"query": "fixture failure"}),
         ))
         .respond_with(ResponseTemplate::new(503))
-        .expect(2)
+        .expect(1)
         .mount(server)
         .await;
 }

@@ -68,7 +68,7 @@ async fn a_host_searches_through_the_builtin_exa_provider() -> TestResult<()> {
 #[tokio::test]
 async fn without_provider_keys_a_host_is_offered_nothing() {
     let service = SearchService::with_builtins(SearchConfig::default());
-    assert!(service.list_tools().tools.is_empty());
+    assert_eq!(service.list_tools().tools.len(), 0);
     let unconfigured = format!("{service:?}");
     assert!(
         unconfigured.contains("exa"),

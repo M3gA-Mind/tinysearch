@@ -41,7 +41,7 @@ class VersionTests(unittest.TestCase):
             fake_bash = bindir / ("bash.cmd" if os.name == "nt" else "bash")
             if os.name == "nt":
                 fake_bash.write_text(
-                    '@echo off\n>"%CAPTURED_ARGS%" %*\nexit /b %FAKE_EXIT%\n'
+                    '@echo off\necho %* > "%CAPTURED_ARGS%"\nexit /b %FAKE_EXIT%\n'
                 )
                 system32 = Path(os.environ.get("SystemRoot", "C:\\Windows")) / "System32"
                 path = str(bindir) + os.pathsep + str(system32)

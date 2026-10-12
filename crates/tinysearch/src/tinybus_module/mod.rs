@@ -25,7 +25,7 @@ impl SearchBusService {
 }
 
 async fn setup(connection: Connection, config: SearchConfig) -> TinyBusResult<()> {
-    let service = SearchService::with_providers(config, crate::provider::builtins());
+    let service = SearchService::with_builtins(config);
     connection
         .serve_at(
             names::OBJECT_PATH.try_into()?,

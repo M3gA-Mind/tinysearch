@@ -35,6 +35,10 @@ serde_json = { workspace = true }
 [dev-dependencies]
 # Direct-provider regression fixtures verify real HTTP requests without live services.
 wiremock = "0.6"
+# Dynamic loading tests stage the native library in a private directory.
+tempfile = "3"
+# Shared loader, broker, and typed-call helpers for native module integration tests.
+tinybus = { workspace = true, features = ["test-support"] }
 tokio = { workspace = true }
 # The GitHub release verifier passes an explicit empty module configuration.
 serde_json = { workspace = true }

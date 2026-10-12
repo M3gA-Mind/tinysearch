@@ -15,6 +15,29 @@ import unittest
 ROOT = Path(__file__).resolve().parent.parent
 
 class PackageTests(unittest.TestCase):
+    def test_platform_verifiers_run_loaded_module_e2e_suite(self):
+        unix_verifier = (ROOT / "scripts/verify-module.sh").read_text()
+        windows_verifier = (ROOT / "scripts/verify-module.ps1").read_text()
+        unix_e2e = (ROOT / "scripts/test-e2e.sh").read_text()
+        windows_e2e_path = ROOT / "scripts/test-e2e.ps1"
+        self.assertIn("--test module_e2e", unix_verifier)
+        self.assertIn("--test module_e2e", windows_verifier)
+        self.assertIn("verify-module.sh", unix_e2e)
+        self.assertIn("scripts/test-e2e.ps1", unix_e2e)
+        self.assertTrue(windows_e2e_path.is_file())
+        windows_e2e = windows_e2e_path.read_text()
+        self.assertIn("verify-module.ps1", windows_e2e)
+        rustc_status = windows_e2e.index("if ($LASTEXITCODE -ne 0) { throw 'rustc -vV failed' }")
+        host_parse = windows_e2e.index("$target = $hostLine.ToString()")
+        self.assertLess(rustc_status, host_parse)
+        self.assertIn("if (-not $hostLine) { throw 'rustc host triple not found' }", windows_e2e)
+
+    def test_windows_verifier_saves_the_existing_artifact_before_try(self):
+        verifier = (ROOT / "scripts/verify-module.ps1").read_text()
+        assignment = verifier.index("$previousArtifact = $env:TINYSEARCH_TEST_MODULE")
+        try_block = verifier.index("try {")
+        self.assertLess(assignment, try_block)
+
     def test_verify_extracts_artifact_under_the_current_user_home(self):
         target = ROOT / "target"; target.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=target) as directory:
@@ -30,7 +53,7 @@ class PackageTests(unittest.TestCase):
                     package.addfile(member, io.BytesIO(data))
             cargo = bindir/"cargo"
             cargo.write_text("#!/usr/bin/env python3\nimport os,sys\nfrom pathlib import Path\n"
-                "module = os.environ.get('TINYJUICE_TEST_MODULE') or os.environ.get('TINYCHANNELS_MODULE_ARTIFACT') or sys.argv[-1]\n"
+                "module = os.environ.get('TINYSEARCH_TEST_MODULE') or os.environ.get('TINYJUICE_TEST_MODULE') or os.environ.get('TINYCHANNELS_MODULE_ARTIFACT') or sys.argv[-1]\n"
                 "Path(os.environ['RECORDED_MODULE_PATH']).write_text(module)\n"
                 "Path(os.environ['RECORDED_MODULE_PATH']+'.exists').write_text(str(Path(module).is_file()))\n")
             cargo.chmod(0o755)

@@ -10,6 +10,7 @@ $rootPrefix = $root.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::Dire
 if (-not $targetRoot.StartsWith($rootPrefix, [StringComparison]::OrdinalIgnoreCase)) { throw 'CARGO_TARGET_DIR must stay inside the repository' }
 $work = Join-Path $targetRoot ("tinysearch-verify-$([System.Guid]::NewGuid().ToString('N'))")
 New-Item -ItemType Directory $work | Out-Null
+$previousArtifact = $env:TINYSEARCH_TEST_MODULE
 try {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $zip = [System.IO.Compression.ZipFile]::OpenRead($resolvedArchive)
@@ -42,7 +43,6 @@ try {
     Expand-Archive -LiteralPath $resolvedArchive -DestinationPath $work
     $library = Join-Path $work 'tinysearch.dll'
     if (-not (Test-Path (Join-Path $work 'modules.toml'))) { throw 'modules.toml missing from archive' }
-    $previousArtifact = $env:TINYSEARCH_TEST_MODULE
     $env:TINYSEARCH_TEST_MODULE = $library
     cargo test --locked --manifest-path Cargo.toml --package tinysearch --test module_e2e
     if ($LASTEXITCODE -ne 0) { throw 'tinysearch module verification failed' }

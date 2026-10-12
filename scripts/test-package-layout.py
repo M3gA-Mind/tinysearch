@@ -32,6 +32,12 @@ class PackageTests(unittest.TestCase):
         self.assertLess(rustc_status, host_parse)
         self.assertIn("if (-not $hostLine) { throw 'rustc host triple not found' }", windows_e2e)
 
+    def test_windows_verifier_saves_the_existing_artifact_before_try(self):
+        verifier = (ROOT / "scripts/verify-module.ps1").read_text()
+        assignment = verifier.index("$previousArtifact = $env:TINYSEARCH_TEST_MODULE")
+        try_block = verifier.index("try {")
+        self.assertLess(assignment, try_block)
+
     def test_verify_extracts_artifact_under_the_current_user_home(self):
         target = ROOT / "target"; target.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=target) as directory:

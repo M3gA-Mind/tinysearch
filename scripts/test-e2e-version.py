@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 
 class VersionTests(unittest.TestCase):
     def test_module_version_is_selected_by_package_name(self):
@@ -69,12 +70,16 @@ class VersionTests(unittest.TestCase):
                 "--version",
                 "0.4.4",
             ]
-            result = subprocess.run(
-                [pwsh, "-NoProfile", "-File", str(script), *arguments],
-                env=environment,
-                text=True,
-                capture_output=True,
-            )
+            try:
+                result = subprocess.run(
+                    [pwsh, "-NoProfile", "-File", str(script), *arguments],
+                    env=environment,
+                    text=True,
+                    capture_output=True,
+                    timeout=30,
+                )
+            except subprocess.TimeoutExpired as error:
+                self.fail(f"PowerShell distro wrapper timed out: {error}")
             self.assertEqual(result.returncode, 37, result.stdout + result.stderr)
             if os.name == "nt":
                 self.assertEqual(
@@ -86,5 +91,35 @@ class VersionTests(unittest.TestCase):
                     json.loads(captured.read_text()),
                     [str(script.with_name("test-distro.sh")), *arguments],
                 )
+
+    def test_verifier_captures_the_existing_module_environment_before_try(self):
+        """The finally block must preserve caller state even on early failures."""
+        verifier_path = Path(__file__).with_name("verify-module.ps1").resolve()
+        verifier = verifier_path.read_text()
+        assignment = verifier.index("$previousArtifact = $env:TINYSEARCH_TEST_MODULE")
+        try_block = verifier.index("try {")
+        self.assertLess(assignment, try_block)
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            return
+
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / "unsafe.zip"
+            with zipfile.ZipFile(archive, "w") as package:
+                package.writestr("../outside.dll", b"unsafe archive member")
+            command = (
+                f"try {{ & '{verifier_path}' '{archive}' }} catch {{ }}; "
+                "[Console]::WriteLine($env:TINYSEARCH_TEST_MODULE)"
+            )
+            environment = dict(os.environ, TINYSEARCH_TEST_MODULE="caller-value")
+            result = subprocess.run(
+                [pwsh, "-NoProfile", "-Command", command],
+                env=environment,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(result.stdout.strip(), "caller-value")
 
 if __name__ == "__main__": unittest.main()

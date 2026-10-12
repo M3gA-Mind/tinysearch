@@ -3,7 +3,12 @@
 //! `TINYSEARCH_TEST_MODULE` can point at the native library extracted from the
 //! archive under test. Provider requests go only to a local wiremock server.
 
-use std::{error::Error, fs, io, path::PathBuf, time::Duration};
+use std::{
+    error::Error,
+    fs, io,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 
 use tinybus::test_support::{call, start_bus, wait_until_idle, wait_until_serving};
 use tinysearch::{
@@ -39,10 +44,35 @@ async fn mount_provider_fixtures(server: &MockServer) {
         .await;
 }
 
-#[tokio::test]
-async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn Error>> {
-    let artifact = if let Some(artifact) = std::env::var_os("TINYSEARCH_TEST_MODULE") {
-        PathBuf::from(artifact)
+fn stage_artifact(
+    artifact: &Path,
+    archive_manifest: Option<&Path>,
+    directory: &Path,
+) -> Result<PathBuf, Box<dyn Error>> {
+    let staged_artifact = directory.join(
+        artifact
+            .file_name()
+            .ok_or_else(|| io::Error::other("module artifact has no filename"))?,
+    );
+    fs::copy(artifact, &staged_artifact)?;
+    let staged_manifest = directory.join("modules.toml");
+    if let Some(archive_manifest) = archive_manifest {
+        fs::copy(archive_manifest, staged_manifest)?;
+    } else {
+        let digest = tinybus::module::sha256_file(&staged_artifact)?;
+        let filename = staged_artifact
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| io::Error::other("module artifact filename is not UTF-8"))?;
+        fs::write(staged_manifest, format!("\"{filename}\" = \"{digest}\"\n"))?;
+    }
+    Ok(staged_artifact)
+}
+
+fn staged_test_artifact() -> Result<(tempfile::TempDir, PathBuf), Box<dyn Error>> {
+    let archive_artifact = std::env::var_os("TINYSEARCH_TEST_MODULE").map(PathBuf::from);
+    let artifact = if let Some(artifact) = archive_artifact.as_ref() {
+        artifact.clone()
     } else {
         let executable = std::env::current_exe()?;
         let target_dir = executable
@@ -60,30 +90,58 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         )
         .into());
     }
+    let archive_manifest = if archive_artifact.is_some() {
+        let manifest = artifact
+            .parent()
+            .ok_or_else(|| io::Error::other("module artifact has no parent directory"))?
+            .join("modules.toml");
+        if !manifest.is_file() {
+            return Err(
+                io::Error::new(io::ErrorKind::NotFound, "archive modules.toml is missing").into(),
+            );
+        }
+        Some(manifest)
+    } else {
+        None
+    };
     // Cargo's `target/debug/deps` inherits runner ACLs on Windows and may be
     // writable by other users. TinyBus correctly refuses modules from there,
-    // so stage the exact bytes and a matching pin in a private temp directory.
+    // so stage the bytes and their pin in a private directory under HOME.
     let home = std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .ok_or_else(|| io::Error::other("current user's home directory is unavailable"))?;
     let staged = tempfile::Builder::new()
         .prefix("tinysearch-module-e2e-")
         .tempdir_in(home)?;
-    let staged_artifact = staged.path().join(
-        artifact
-            .file_name()
-            .ok_or_else(|| io::Error::other("module artifact has no filename"))?,
-    );
-    fs::copy(&artifact, &staged_artifact)?;
-    let digest = tinybus::module::sha256_file(&staged_artifact)?;
-    let filename = staged_artifact
+    let staged_artifact = stage_artifact(&artifact, archive_manifest.as_deref(), staged.path())?;
+    Ok((staged, staged_artifact))
+}
+
+#[test]
+fn archive_manifest_is_preserved_for_tinybus_validation() -> Result<(), Box<dyn Error>> {
+    let archive = tempfile::tempdir()?;
+    let artifact = tinybus::test_support::artifact_path(archive.path(), "tinysearch");
+    fs::write(&artifact, b"module bytes")?;
+    let manifest = archive.path().join("modules.toml");
+    let filename = artifact
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| io::Error::other("module artifact filename is not UTF-8"))?;
-    fs::write(
-        staged.path().join("modules.toml"),
-        format!("\"{filename}\" = \"{digest}\"\n"),
-    )?;
+    let archive_pin = format!("\"{filename}\" = \"{}\"\n", "0".repeat(64));
+    fs::write(&manifest, &archive_pin)?;
+
+    let staged = tempfile::tempdir()?;
+    stage_artifact(&artifact, Some(&manifest), staged.path())?;
+    assert_eq!(
+        fs::read_to_string(staged.path().join("modules.toml"))?,
+        archive_pin
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn Error>> {
+    let (_staged, staged_artifact) = staged_test_artifact()?;
 
     let server = MockServer::start().await;
     mount_provider_fixtures(&server).await;

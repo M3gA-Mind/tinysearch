@@ -92,6 +92,58 @@ class VersionTests(unittest.TestCase):
                     [str(script.with_name("test-distro.sh")), *arguments],
                 )
 
+    def test_distro_powershell_rejects_unsupported_image_before_docker(self):
+        """A real Windows call preserves the Bash validation exit and diagnostic."""
+        if os.name != "nt":
+            self.skipTest("requires the Windows PowerShell-to-Bash process boundary")
+
+        pwsh = shutil.which("pwsh")
+        if pwsh is None:
+            self.fail("Windows module CI must provide pwsh for the distro wrapper test")
+
+        script = Path(__file__).with_name("test-distro.ps1").resolve()
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Path(directory)
+            docker_called = fixture / "docker-called.txt"
+            bash_env = fixture / "bash-env.sh"
+            bash_env.write_text(
+                'docker() { printf called > "$DOCKER_CALLED"; return 99; }\n'
+            )
+            environment = dict(
+                os.environ,
+                BASH_ENV=bash_env.as_posix(),
+                DOCKER_CALLED=docker_called.as_posix(),
+            )
+            result = subprocess.run(
+                [
+                    pwsh,
+                    "-NoProfile",
+                    "-File",
+                    str(script),
+                    "unsupported image:latest",
+                    "--crate",
+                    "tinysearch",
+                    "--version",
+                    "0.4.4",
+                    "--target",
+                    "x86_64-unknown-linux-gnu",
+                    "--host",
+                    "ubuntu-22.04-x86_64",
+                    "--extra-files-json",
+                    "[]",
+                    "--output-dir",
+                    "target/test-distro-unsupported-image",
+                ],
+                env=environment,
+                text=True,
+                capture_output=True,
+                timeout=30,
+            )
+
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("unsupported module build image: unsupported image:latest", result.stderr)
+        self.assertFalse(docker_called.exists(), "Docker must not run for an unsupported image")
+
     def test_verifier_captures_the_existing_module_environment_before_try(self):
         """The finally block must preserve caller state even on early failures."""
         verifier_path = Path(__file__).with_name("verify-module.ps1").resolve()

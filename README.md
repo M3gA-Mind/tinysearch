@@ -11,6 +11,27 @@ model-facing declarations; `ExecuteTool` invokes a declared tool and returns
 normalized results, citations, an optional answer, status, and optional provider
 data. The contract version is 2.0.
 
+## Using the library
+
+A host that links `tinysearch` as a Rust library, rather than loading the
+module, gets the same built-in providers with
+`SearchService::with_builtins(config)`. The configuration is the same
+`SearchConfig` the module receives; only providers it configures and enables
+are offered, and calls go through the same routing and fallbacks:
+
+```rust
+let service = tinysearch::SearchService::with_builtins(config);
+let response = service
+    .execute_tool(tinysearch::ExecuteToolRequest {
+        name: tinysearch::role_tool_name(tinysearch::Role::Search).into(),
+        arguments: serde_json::json!({ "query": "rust async" }),
+    })
+    .await?;
+```
+
+`SearchService::with_providers` remains for hosts and tests that supply their
+own provider implementations.
+
 ## Presentation
 
 The default presentation, `roles`, exposes one generic tool per capability

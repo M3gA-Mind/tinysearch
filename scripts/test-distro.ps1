@@ -4,7 +4,12 @@ $previousMsys = $env:MSYS
 try {
     # Git for Windows otherwise expands the distro script's default `[]`
     # argument while converting argv, and bash.exe can crash before running it.
-    $env:MSYS = 'noglob'
+    if ([string]::IsNullOrEmpty($previousMsys)) {
+        $env:MSYS = 'noglob'
+    }
+    else {
+        $env:MSYS = "$previousMsys noglob"
+    }
     & bash $script @args
     $exitCode = $LASTEXITCODE
 }

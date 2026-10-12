@@ -166,18 +166,22 @@ async fn dropping_abort_guard_cancels_a_started_task() {
         let _notify = NotifyOnDrop(Some(dropped));
         std::future::pending::<()>().await;
     });
-    wait_started
-        .await
-        .expect("task should reach the start barrier before the guard is dropped");
+    assert!(
+        matches!(wait_started.await, Ok(())),
+        "task should reach the start barrier before the guard is dropped"
+    );
 
     {
         let _abort_on_drop = AbortOnDrop(task);
     }
 
-    tokio::time::timeout(Duration::from_secs(1), wait_dropped)
-        .await
-        .expect("dropping the guard should cancel the pending task promptly")
-        .expect("task drop sentinel should report cancellation");
+    assert!(
+        matches!(
+            tokio::time::timeout(Duration::from_secs(1), wait_dropped).await,
+            Ok(Ok(()))
+        ),
+        "dropping the guard should cancel the pending task promptly"
+    );
 }
 
 #[tokio::test]

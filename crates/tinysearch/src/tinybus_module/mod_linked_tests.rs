@@ -16,7 +16,7 @@ async fn linked_module_is_admitted_and_serves_search_interface() -> TestResult {
     let caller = Connection::connect(bus.connect().await?).await?;
     let proxy = caller.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
     let tools: ListToolsResponse = proxy.call("ListTools", ()).await?;
-    assert!(tools.tools.is_empty());
+    assert_eq!(tools.tools.len(), 0);
     Ok(())
 }
 

@@ -27,6 +27,8 @@ class VersionTests(unittest.TestCase):
         self.assertTrue(script.is_file())
         text = script.read_text()
         self.assertIn('& bash $script @args', text)
+        self.assertIn("$env:MSYS = 'noglob'", text)
+        self.assertIn('$env:MSYS = $previousMsys', text)
         self.assertIn('$exitCode = $LASTEXITCODE', text)
         self.assertIn('exit $exitCode', text)
 

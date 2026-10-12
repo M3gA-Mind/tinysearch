@@ -1,8 +1,9 @@
-#![cfg(not(feature = "static-link"))]
 //! Exercises the published module through `TinyBus`'s dynamic loader.
 //!
 //! `TINYSEARCH_TEST_MODULE` can point at the native library extracted from the
 //! archive under test. Provider requests go only to a local wiremock server.
+
+#![cfg(not(feature = "static-link"))]
 
 use std::{
     error::Error,

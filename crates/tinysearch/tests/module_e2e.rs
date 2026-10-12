@@ -55,10 +55,10 @@ async fn mount_provider_fixtures(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/search"))
         .and(body_partial_json(
-            serde_json::json!({"query": "fixture mismatch"}),
+            serde_json::json!({"query": "fixture failure"}),
         ))
         .respond_with(ResponseTemplate::new(503))
-        .expect(1)
+        .expect(2)
         .mount(server)
         .await;
 }

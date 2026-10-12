@@ -45,6 +45,10 @@ serde_json = { workspace = true }
 
 [features]
 default = []
+# Local dev/test only: export `linked_module()` instead of the C ABI symbols so
+# several module crates can share one binary.
+linked = ["static-link"]
+static-link = []
 
 [lints]
 workspace = true

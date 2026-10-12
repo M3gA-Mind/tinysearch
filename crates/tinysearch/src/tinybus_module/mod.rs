@@ -36,7 +36,7 @@ async fn setup(connection: Connection, config: SearchConfig) -> TinyBusResult<()
     Ok(())
 }
 
-tinybus_module::module_export! {
+tinybus_module::module_export_optional_static! {
     setup = setup,
     config = SearchConfig,
     worker_threads = 1,
@@ -55,3 +55,7 @@ mod test;
 #[cfg(test)]
 #[path = "mod_gemini_search_tests.rs"]
 mod gemini_search_tests;
+
+#[cfg(all(test, feature = "static-link"))]
+#[path = "mod_linked_tests.rs"]
+mod linked_tests;

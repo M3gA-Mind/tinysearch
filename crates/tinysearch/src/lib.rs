@@ -7,6 +7,8 @@ mod error;
 mod provider;
 mod search;
 mod tinybus_module;
+#[cfg(feature = "static-link")]
+pub use tinybus_module::linked_module;
 pub use error::{Error, Result};
 pub use search::{ProviderFuture, SearchProvider, SearchService};
 pub use tinysearch_bus;

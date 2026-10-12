@@ -27,6 +27,16 @@ impl<T> Drop for AbortOnDrop<T> {
     }
 }
 
+struct NotifyOnDrop(Option<tokio::sync::oneshot::Sender<()>>);
+
+impl Drop for NotifyOnDrop {
+    fn drop(&mut self) {
+        if let Some(notified) = self.0.take() {
+            let _ = notified.send(());
+        }
+    }
+}
+
 async fn mount_provider_fixtures(server: &MockServer) {
     Mock::given(method("POST"))
         .and(path("/search"))
@@ -145,6 +155,29 @@ fn archive_manifest_is_preserved_for_tinybus_validation() -> Result<(), Box<dyn 
         archive_pin
     );
     Ok(())
+}
+
+#[tokio::test]
+async fn dropping_abort_guard_cancels_a_started_task() {
+    let (started, wait_started) = tokio::sync::oneshot::channel();
+    let (dropped, wait_dropped) = tokio::sync::oneshot::channel();
+    let task = tokio::spawn(async move {
+        let _ = started.send(());
+        let _notify = NotifyOnDrop(Some(dropped));
+        std::future::pending::<()>().await;
+    });
+    wait_started
+        .await
+        .expect("task should reach the start barrier before the guard is dropped");
+
+    {
+        let _abort_on_drop = AbortOnDrop(task);
+    }
+
+    tokio::time::timeout(Duration::from_secs(1), wait_dropped)
+        .await
+        .expect("dropping the guard should cancel the pending task promptly")
+        .expect("task drop sentinel should report cancellation");
 }
 
 #[tokio::test]

@@ -64,6 +64,15 @@ impl SearchService {
         Self { config, providers }
     }
 
+    /// Constructs a service with `TinySearch`'s built-in providers, the same
+    /// ones the loadable module serves, for hosts that link this crate as a
+    /// library instead of loading the module. Which providers are usable, and
+    /// on which route, still comes from `config`.
+    #[must_use]
+    pub fn with_builtins(config: SearchConfig) -> Self {
+        Self::with_providers(config, crate::provider::builtins())
+    }
+
     /// Returns declarations for tools currently enabled by configuration.
     #[must_use]
     pub fn list_tools(&self) -> ListToolsResponse {

@@ -42,8 +42,15 @@ try {
     Expand-Archive -LiteralPath $resolvedArchive -DestinationPath $work
     $library = Join-Path $work 'tinysearch.dll'
     if (-not (Test-Path (Join-Path $work 'modules.toml'))) { throw 'modules.toml missing from archive' }
-    cargo run --locked --release --manifest-path Cargo.toml --package tinysearch --example verify_module -- $library
+    $previousArtifact = $env:TINYSEARCH_MODULE_ARTIFACT
+    $env:TINYSEARCH_MODULE_ARTIFACT = $library
+    cargo test --locked --manifest-path Cargo.toml --package tinysearch --test module_e2e
     if ($LASTEXITCODE -ne 0) { throw 'tinysearch module verification failed' }
 } finally {
+    if ($null -eq $previousArtifact) {
+        Remove-Item Env:TINYSEARCH_MODULE_ARTIFACT -ErrorAction SilentlyContinue
+    } else {
+        $env:TINYSEARCH_MODULE_ARTIFACT = $previousArtifact
+    }
     Remove-Item -LiteralPath $work -Recurse -Force
 }

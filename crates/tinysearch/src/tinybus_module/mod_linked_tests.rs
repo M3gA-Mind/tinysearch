@@ -19,7 +19,7 @@ async fn linked_module_is_admitted_and_serves_search_interface() {
         .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
         .unwrap();
     let tools: ListToolsResponse = proxy.call("ListTools", ()).await.unwrap();
-    assert!(tools.tools.is_empty() || !tools.tools.is_empty());
+    assert!(tools.tools.is_empty());
 }
 
 #[test]

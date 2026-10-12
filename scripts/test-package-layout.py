@@ -23,6 +23,7 @@ class PackageTests(unittest.TestCase):
         self.assertIn("--test module_e2e", unix_verifier)
         self.assertIn("--test module_e2e", windows_verifier)
         self.assertIn("verify-module.sh", unix_e2e)
+        self.assertIn("scripts/test-e2e.ps1", unix_e2e)
         self.assertTrue(windows_e2e_path.is_file())
         self.assertIn("verify-module.ps1", windows_e2e_path.read_text())
 
@@ -41,7 +42,7 @@ class PackageTests(unittest.TestCase):
                     package.addfile(member, io.BytesIO(data))
             cargo = bindir/"cargo"
             cargo.write_text("#!/usr/bin/env python3\nimport os,sys\nfrom pathlib import Path\n"
-                "module = os.environ.get('TINYSEARCH_MODULE_ARTIFACT') or os.environ.get('TINYJUICE_TEST_MODULE') or os.environ.get('TINYCHANNELS_MODULE_ARTIFACT') or sys.argv[-1]\n"
+                "module = os.environ.get('TINYSEARCH_TEST_MODULE') or os.environ.get('TINYJUICE_TEST_MODULE') or os.environ.get('TINYCHANNELS_MODULE_ARTIFACT') or sys.argv[-1]\n"
                 "Path(os.environ['RECORDED_MODULE_PATH']).write_text(module)\n"
                 "Path(os.environ['RECORDED_MODULE_PATH']+'.exists').write_text(str(Path(module).is_file()))\n")
             cargo.chmod(0o755)

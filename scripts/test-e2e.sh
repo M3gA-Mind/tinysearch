@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
-target="$(rustc -vV | sed -n 's/^host: //p')"
-version="$(cargo metadata --manifest-path Cargo.toml --format-version 1 --no-deps | jq -er '.packages[] | select(.name == "tinysearch") | .version')"
 case "${RUNNER_OS:-$(uname -s)}" in
   Windows|MINGW*|MSYS*|CYGWIN*)
-    pwsh -NoProfile -File scripts/build-module.ps1 -Crate tinysearch -Version "$version" -Target "$target" -HostKey ci -OutputDir target/module-e2e
-    pwsh -NoProfile -File scripts/verify-module.ps1 -Archive "target/module-e2e/tinysearch-$version-ci.zip"
+    pwsh -NoProfile -File scripts/test-e2e.ps1
     ;;
   *)
+    target="$(rustc -vV | sed -n 's/^host: //p')"
+    version="$(cargo metadata --manifest-path Cargo.toml --format-version 1 --no-deps | jq -er '.packages[] | select(.name == "tinysearch") | .version')"
     scripts/build-module.sh --crate tinysearch --version "$version" --target "$target" --host ci --output-dir target/module-e2e
     scripts/verify-module.sh --archive "target/module-e2e/tinysearch-$version-ci.tar.gz"
     ;;

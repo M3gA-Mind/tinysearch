@@ -1,11 +1,11 @@
 //! Exercises the published module through `TinyBus`'s dynamic loader.
 //!
-//! `TINYSEARCH_MODULE_ARTIFACT` must point at the native library extracted from
-//! the archive under test. Provider requests go only to a local wiremock server.
+//! `TINYSEARCH_TEST_MODULE` can point at the native library extracted from the
+//! archive under test. Provider requests go only to a local wiremock server.
 
 use std::{error::Error, io, path::PathBuf, time::Duration};
 
-use tinybus::{Connection, broker::Broker, module::ModuleHost, transport::memory::MemoryBus};
+use tinybus::test_support::{call, start_bus, wait_until_idle, wait_until_serving};
 use tinysearch::{
     ExecuteToolRequest, ExecuteToolResponse, ListToolsResponse, SearchStatus, errors, names,
 };
@@ -41,21 +41,29 @@ async fn mount_provider_fixtures(server: &MockServer) {
 
 #[tokio::test]
 async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn Error>> {
-    let artifact = PathBuf::from(std::env::var_os("TINYSEARCH_MODULE_ARTIFACT").ok_or_else(
-        || {
-            io::Error::new(
-                io::ErrorKind::NotFound,
-                "TINYSEARCH_MODULE_ARTIFACT is required",
-            )
-        },
-    )?);
+    let artifact = if let Some(artifact) = std::env::var_os("TINYSEARCH_TEST_MODULE") {
+        PathBuf::from(artifact)
+    } else {
+        let executable = std::env::current_exe()?;
+        let target_dir = executable
+            .parent()
+            .ok_or_else(|| io::Error::other("test executable has no parent directory"))?;
+        tinybus::test_support::artifact_path(target_dir, "tinysearch")
+    };
+    if !artifact.is_file() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "TinySearch cdylib artifact not found at {}",
+                artifact.display()
+            ),
+        )
+        .into());
+    }
     let server = MockServer::start().await;
     mount_provider_fixtures(&server).await;
 
-    let bus = MemoryBus::new();
-    let broker = Broker::new();
-    let broker_task = broker.spawn(bus.clone());
-    let module_host = ModuleHost::new(broker);
+    let (module_host, client, broker_task) = start_bus().await?;
     let config = serde_json::json!({
         "providers": {
             "exa": {
@@ -68,24 +76,10 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
     let info = module_host.load_file_with_config(&artifact, config)?;
     assert_eq!(info.name, "tinysearch");
 
-    let client = Connection::connect(bus.connect().await?).await?;
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            if client
-                .list_names()
-                .await?
-                .iter()
-                .any(|name| name.as_str() == names::INTERFACE)
-            {
-                return tinybus::Result::Ok(());
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await??;
+    wait_until_serving(&client, names::INTERFACE, Duration::from_secs(5)).await?;
 
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
-    let listed: ListToolsResponse = proxy.call(names::methods::LIST_TOOLS, ()).await?;
+    let listed: ListToolsResponse = call(&proxy, names::methods::LIST_TOOLS, ()).await?;
     assert!(
         listed
             .tools
@@ -93,15 +87,15 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
             .any(|tool| tool.name == names::tools::WEB_SEARCH)
     );
 
-    let succeeded: ExecuteToolResponse = proxy
-        .call(
-            names::methods::EXECUTE_TOOL,
-            (ExecuteToolRequest {
-                name: names::tools::WEB_SEARCH.into(),
-                arguments: serde_json::json!({"query": "fixture success"}),
-            },),
-        )
-        .await?;
+    let succeeded: ExecuteToolResponse = call(
+        &proxy,
+        names::methods::EXECUTE_TOOL,
+        (ExecuteToolRequest {
+            name: names::tools::WEB_SEARCH.into(),
+            arguments: serde_json::json!({"query": "fixture success"}),
+        },),
+    )
+    .await?;
     assert_eq!(succeeded.status, SearchStatus::Ok);
     assert_eq!(succeeded.provider, "exa");
     assert_eq!(succeeded.results.len(), 1);
@@ -111,15 +105,15 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         Some("Local provider response")
     );
 
-    let failed = proxy
-        .call::<ExecuteToolResponse>(
-            names::methods::EXECUTE_TOOL,
-            (ExecuteToolRequest {
-                name: names::tools::WEB_SEARCH.into(),
-                arguments: serde_json::json!({"query": "fixture failure"}),
-            },),
-        )
-        .await;
+    let failed = call::<ExecuteToolResponse, _>(
+        &proxy,
+        names::methods::EXECUTE_TOOL,
+        (ExecuteToolRequest {
+            name: names::tools::WEB_SEARCH.into(),
+            arguments: serde_json::json!({"query": "fixture failure"}),
+        },),
+    )
+    .await;
     let failed = match failed {
         Ok(response) => return Err(format!("unexpected successful response: {response:?}").into()),
         Err(error) => error,
@@ -128,6 +122,7 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         errors::code_of(&failed.to_string()),
         Some(errors::UNAVAILABLE)
     );
+    wait_until_idle(&module_host, "tinysearch", Duration::from_secs(5)).await?;
 
     broker_task.abort();
     Ok(())

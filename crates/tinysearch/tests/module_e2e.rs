@@ -3,7 +3,7 @@
 //! `TINYSEARCH_TEST_MODULE` can point at the native library extracted from the
 //! archive under test. Provider requests go only to a local wiremock server.
 
-use std::{error::Error, io, path::PathBuf, time::Duration};
+use std::{error::Error, fs, io, path::PathBuf, time::Duration};
 
 use tinybus::test_support::{call, start_bus, wait_until_idle, wait_until_serving};
 use tinysearch::{
@@ -60,6 +60,28 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         )
         .into());
     }
+    // Cargo's `target/debug/deps` inherits runner ACLs on Windows and may be
+    // writable by other users. TinyBus correctly refuses modules from there,
+    // so stage the exact bytes and a matching pin in a private temp directory.
+    let staged = tempfile::Builder::new()
+        .prefix("tinysearch-module-e2e-")
+        .tempdir()?;
+    let staged_artifact = staged.path().join(
+        artifact
+            .file_name()
+            .ok_or_else(|| io::Error::other("module artifact has no filename"))?,
+    );
+    fs::copy(&artifact, &staged_artifact)?;
+    let digest = tinybus::module::sha256_file(&staged_artifact)?;
+    let filename = staged_artifact
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| io::Error::other("module artifact filename is not UTF-8"))?;
+    fs::write(
+        staged.path().join("modules.toml"),
+        format!("\"{filename}\" = \"{digest}\"\n"),
+    )?;
+
     let server = MockServer::start().await;
     mount_provider_fixtures(&server).await;
 
@@ -73,7 +95,7 @@ async fn loaded_artifact_lists_and_executes_search_tools() -> Result<(), Box<dyn
         },
         "presentation": { "roles": { "search": ["exa"] } }
     });
-    let info = module_host.load_file_with_config(&artifact, config)?;
+    let info = module_host.load_file_with_config(&staged_artifact, config)?;
     assert_eq!(info.name, "tinysearch");
 
     wait_until_serving(&client, names::INTERFACE, Duration::from_secs(5)).await?;

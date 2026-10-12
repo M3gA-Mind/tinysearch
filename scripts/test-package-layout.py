@@ -25,7 +25,12 @@ class PackageTests(unittest.TestCase):
         self.assertIn("verify-module.sh", unix_e2e)
         self.assertIn("scripts/test-e2e.ps1", unix_e2e)
         self.assertTrue(windows_e2e_path.is_file())
-        self.assertIn("verify-module.ps1", windows_e2e_path.read_text())
+        windows_e2e = windows_e2e_path.read_text()
+        self.assertIn("verify-module.ps1", windows_e2e)
+        rustc_status = windows_e2e.index("if ($LASTEXITCODE -ne 0) { throw 'rustc -vV failed' }")
+        host_parse = windows_e2e.index("$target = $hostLine.ToString()")
+        self.assertLess(rustc_status, host_parse)
+        self.assertIn("if (-not $hostLine) { throw 'rustc host triple not found' }", windows_e2e)
 
     def test_verify_extracts_artifact_under_the_current_user_home(self):
         target = ROOT / "target"; target.mkdir(exist_ok=True)

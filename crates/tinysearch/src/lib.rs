@@ -9,6 +9,8 @@ mod search;
 mod tinybus_module;
 pub use error::{Error, Result};
 pub use search::{ProviderFuture, SearchProvider, SearchService};
+#[cfg(feature = "static-link")]
+pub use tinybus_module::linked_module;
 pub use tinysearch_bus;
 pub use tinysearch_bus::{
     BACKEND_PROVIDERS, BackendAuthMode, BackendConfig, CONTRACT_VERSION, Citation,

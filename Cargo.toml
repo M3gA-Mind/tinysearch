@@ -34,13 +34,13 @@ tinysearch-bus = { path = "crates/tinysearch-bus" }
 # TinyBus defines the message types, interface macro, and frozen module ABI
 # used by the generated integration. Socket and CLI features are unnecessary
 # here.
-tinybus = { path = "vendor/tinybus/crates/tinybus", version = "0.1.4", default-features = false, features = [
+tinybus = { version = ">=0.1.3, <0.2", default-features = false, features = [
     "macros",
     "modules",
 ] }
 # The module-side SDK owns the isolated runtime and exports the ABI entrypoints
 # required by TinyBus's dynamic loader.
-tinybus-module = { path = "vendor/tinybus/crates/tinybus-module", version = "0.1.4" }
+tinybus-module = { version = ">=0.1.3, <0.2" }
 # Derive macros for the crate-wide error type in `crates/tinysearch/src/error/`.
 # Every dependency entry should carry a comment like this one saying why it is
 # here.
@@ -92,3 +92,11 @@ private_intra_doc_links = "warn"
 lto = "thin"
 codegen-units = 1
 strip = "debuginfo"
+
+# tinybus is resolved by version range so a host workspace (OpenHuman) can unify
+# every module on one copy through its own [patch]. Standalone builds use the
+# pinned submodule; this table is ignored when this workspace is a dependency.
+[patch.crates-io]
+tinybus = { path = "vendor/tinybus/crates/tinybus" }
+tinybus-macros = { path = "vendor/tinybus/crates/tinybus-macros" }
+tinybus-module = { path = "vendor/tinybus/crates/tinybus-module" }

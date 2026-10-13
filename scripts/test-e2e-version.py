@@ -70,7 +70,7 @@ class VersionTests(unittest.TestCase):
                 "--crate",
                 "tinysearch",
                 "--version",
-                "0.5.0",
+                "0.5.1",
             ]
             try:
                 result = subprocess.run(
@@ -127,7 +127,7 @@ class VersionTests(unittest.TestCase):
                     "--crate",
                     "tinysearch",
                     "--version",
-                    "0.5.0",
+                    "0.5.1",
                     "--target",
                     "x86_64-unknown-linux-gnu",
                     "--host",

@@ -128,7 +128,7 @@ pub fn render_markdown(
         } else {
             item.title.trim()
         };
-        out.push_str(&format!("\n## [{title}]({})\n", item.url.trim());
+        let _ = write!(out, "\n## [{title}]({})\n", item.url.trim());
         if let Some(date) = non_empty(item.published.as_deref()) {
             let _ = write!(out, "_Published: {date}_\n\n");
         }
@@ -140,7 +140,7 @@ pub fn render_markdown(
         out.push_str("\n### Sources\n");
         for citation in &response.citations {
             let title = non_empty(citation.title.as_deref()).unwrap_or(citation.url.as_str());
-            let _ = write!(out, "- [{title}]({})\n", citation.url);
+            let _ = writeln!(out, "- [{title}]({})", citation.url);
         }
     }
     out

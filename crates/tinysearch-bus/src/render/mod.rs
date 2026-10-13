@@ -120,7 +120,7 @@ pub fn render_markdown(
 ) -> String {
     let mut out = format!("# {}\n", heading(response, subject));
     if let Some(answer) = non_empty(response.answer.as_deref()) {
-        let _ = write!(out, "\n{answer}\n"));
+        let _ = write!(out, "\n{answer}\n");
     }
     for item in response.results.iter().take(max_results) {
         let title = if item.title.trim().is_empty() {
@@ -130,11 +130,10 @@ pub fn render_markdown(
         };
         out.push_str(&format!("\n## [{title}]({})\n", item.url.trim());
         if let Some(date) = non_empty(item.published.as_deref()) {
-            let _ = write!(out, "_Published: {date}_\n\n"));
+            let _ = write!(out, "_Published: {date}_\n\n");
         }
         if let Some(snippet) = non_empty(item.snippet.as_deref()) {
-            out.push_str(&format!(
-                "> {}\n", truncate(snippet, TEXT_EXCERPT_CHARS, "…"));
+            let _ = writeln!(out, "> {}", truncate(snippet, TEXT_EXCERPT_CHARS, "…"));
         }
     }
     if !response.citations.is_empty() {

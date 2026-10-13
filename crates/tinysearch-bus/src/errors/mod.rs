@@ -60,6 +60,63 @@ pub fn is_unauthorized(code: &str) -> bool {
     matches!(code, BACKEND_UNAUTHORIZED | PROVIDER_UNAUTHORIZED)
 }
 
+/// What a failure means to a host, independent of its exact code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Category {
+    /// Every provider failed or is unreachable; nothing more can answer now.
+    Exhausted,
+    /// The account behind the call cannot pay for it.
+    InsufficientBalance,
+    /// A rate limit was reached; it clears on its own.
+    RateLimited,
+    /// A credential was rejected (backend or provider).
+    Unauthorized,
+    /// The request itself was rejected; retrying it unchanged cannot work.
+    InvalidArguments,
+    /// No recognised code in the message.
+    Unclassified,
+}
+
+impl Category {
+    /// Maps a code from [`ALL`] to its category; unknown codes are unclassified.
+    #[must_use]
+    pub fn of_code(code: &str) -> Self {
+        match code {
+            UNAVAILABLE => Self::Exhausted,
+            INSUFFICIENT_BALANCE => Self::InsufficientBalance,
+            RATE_LIMITED => Self::RateLimited,
+            BACKEND_UNAUTHORIZED | PROVIDER_UNAUTHORIZED => Self::Unauthorized,
+            INVALID_ARGUMENTS => Self::InvalidArguments,
+            _ => Self::Unclassified,
+        }
+    }
+}
+
+/// Classifies a bus error message into a [`Category`] via [`code_of`].
+///
+/// # Examples
+///
+/// ```
+/// # use tinysearch_bus::errors::{self, Category};
+/// assert_eq!(
+///     errors::classify("tinysearch.provider_unavailable: all failed"),
+///     Category::Exhausted
+/// );
+/// assert_eq!(errors::classify("boom"), Category::Unclassified);
+/// ```
+#[must_use]
+pub fn classify(message: &str) -> Category {
+    code_of(message).map_or(Category::Unclassified, Category::of_code)
+}
+
+/// Returns whether `message` means no provider can answer for the rest of the
+/// session. Only the "every provider is unavailable" verdict qualifies: a rate
+/// limit clears on its own, and balance or argument errors say what to change.
+#[must_use]
+pub fn exhausts_providers(message: &str) -> bool {
+    classify(message) == Category::Exhausted
+}
+
 /// Formats `message` with the `tinysearch.<code>: ` prefix.
 #[must_use]
 pub fn with_code(code: &str, message: &str) -> String {

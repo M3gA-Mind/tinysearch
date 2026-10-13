@@ -7,7 +7,7 @@
 //! field is added. It is deliberately independent of the package version the
 
 /// The wire contract version this crate defines.
-pub const CONTRACT_VERSION: (u32, u32) = (2, 1);
+pub const CONTRACT_VERSION: (u32, u32) = (2, 2);
 
 /// Returns whether a host holding [`CONTRACT_VERSION`] can bind to a module
 /// reporting `module`.

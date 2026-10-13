@@ -42,3 +42,30 @@ fn credential_codes_are_classified_and_fall_back() {
     }
     assert!(!is_unauthorized(UNAVAILABLE));
 }
+
+#[test]
+fn classify_maps_every_code_to_a_category() {
+    let expected = [
+        (INSUFFICIENT_BALANCE, Category::InsufficientBalance),
+        (RATE_LIMITED, Category::RateLimited),
+        (UNAVAILABLE, Category::Exhausted),
+        (INVALID_ARGUMENTS, Category::InvalidArguments),
+        (BACKEND_UNAUTHORIZED, Category::Unauthorized),
+        (PROVIDER_UNAUTHORIZED, Category::Unauthorized),
+    ];
+    assert_eq!(expected.len(), ALL.len());
+    for (code, category) in expected {
+        assert_eq!(classify(&with_code(code, "x")), category, "{code}");
+    }
+    assert_eq!(classify("plain failure"), Category::Unclassified);
+    assert_eq!(classify("tinysearch.nope: x"), Category::Unclassified);
+}
+
+#[test]
+fn only_the_unavailable_verdict_exhausts_providers() {
+    assert!(exhausts_providers(&with_code(UNAVAILABLE, "all failed")));
+    for code in ALL.iter().filter(|c| **c != UNAVAILABLE) {
+        assert!(!exhausts_providers(&with_code(code, "x")), "{code}");
+    }
+    assert!(!exhausts_providers("unclassified"));
+}

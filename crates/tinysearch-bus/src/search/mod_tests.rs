@@ -123,3 +123,78 @@ fn role_response_fields_are_optional_on_the_wire() -> serde_json::Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn role_helpers_round_trip_config_keys() {
+    assert_eq!(ROLES, [Role::Search, Role::Answer, Role::Contents]);
+    for role in ROLES {
+        assert_eq!(parse_role(role_key(role)), Some(role));
+        assert_eq!(parse_role(&format!("  {} ", role_key(role))), Some(role));
+    }
+    assert_eq!(role_key(Role::Contents), "contents");
+    assert_eq!(parse_role("Search"), None);
+    assert_eq!(parse_role("nope"), None);
+}
+
+#[test]
+fn presentation_mode_names_parse_and_match_serde() -> serde_json::Result<()> {
+    for mode in [
+        PresentationMode::Roles,
+        PresentationMode::AllTools,
+        PresentationMode::Router,
+        PresentationMode::OneProvider,
+    ] {
+        assert_eq!(PresentationMode::parse(mode.as_str()), Some(mode));
+        assert_eq!(
+            serde_json::to_value(mode)?,
+            serde_json::json!(mode.as_str())
+        );
+    }
+    assert_eq!(
+        PresentationMode::parse(" Router "),
+        Some(PresentationMode::Router)
+    );
+    assert_eq!(PresentationMode::parse("x"), None);
+    Ok(())
+}
+
+#[test]
+fn provider_route_keeps_wire_and_config_spellings() -> serde_json::Result<()> {
+    #[derive(Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+    struct Holder {
+        #[serde(with = "managed_route")]
+        route: ProviderRoute,
+    }
+
+    assert_eq!(
+        serde_json::to_value(ProviderRoute::Backend)?,
+        serde_json::json!("backend")
+    );
+    let aliased: ProviderRoute = serde_json::from_value(serde_json::json!("managed"))?;
+    assert_eq!(aliased, ProviderRoute::Backend);
+    assert_eq!(ProviderRoute::Backend.config_name(), "managed");
+    assert_eq!(
+        ProviderRoute::parse("Managed"),
+        Some(ProviderRoute::Backend)
+    );
+    assert_eq!(
+        ProviderRoute::parse("backend"),
+        Some(ProviderRoute::Backend)
+    );
+    assert_eq!(ProviderRoute::parse("direct"), Some(ProviderRoute::Direct));
+    assert_eq!(ProviderRoute::parse("x"), None);
+
+    let holder = Holder {
+        route: ProviderRoute::Backend,
+    };
+    assert_eq!(
+        serde_json::to_value(&holder)?,
+        serde_json::json!({"route": "managed"})
+    );
+    for spelling in ["managed", "backend"] {
+        let decoded: Holder = serde_json::from_value(serde_json::json!({"route": spelling}))?;
+        assert_eq!(decoded, holder);
+    }
+    assert!(serde_json::from_value::<Holder>(serde_json::json!({"route": "x"})).is_err());
+    Ok(())
+}

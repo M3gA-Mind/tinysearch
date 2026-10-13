@@ -77,13 +77,67 @@ pub enum BackendAuthMode {
 
 /// Route for a provider request.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderRoute {
     /// Call the provider directly.
     #[default]
     Direct,
     /// Call through the managed backend.
+    #[serde(alias = "managed")]
     Backend,
+}
+
+impl ProviderRoute {
+    /// The name hosts use in user-facing configuration (`managed` / `direct`).
+    ///
+    /// The wire name of [`ProviderRoute::Backend`] is `backend`; user config
+    /// has always called the same route `managed`.
+    #[must_use]
+    pub const fn config_name(self) -> &'static str {
+        match self {
+            Self::Direct => "direct",
+            Self::Backend => "managed",
+        }
+    }
+
+    /// Parses a configuration name; accepts `managed`, `backend` and `direct`
+    /// case-insensitively, ignoring surrounding whitespace.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "managed" | "backend" => Some(Self::Backend),
+            "direct" => Some(Self::Direct),
+            _ => None,
+        }
+    }
+}
+
+/// Serde adapter that reads and writes [`ProviderRoute`] in the user-config
+/// spelling (`managed` / `direct`) instead of the wire spelling.
+///
+/// Use as `#[serde(with = "tinysearch_bus::managed_route")]`.
+pub mod managed_route {
+    use super::ProviderRoute;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    /// Serializes with [`ProviderRoute::config_name`].
+    ///
+    /// # Errors
+    /// Propagates the serializer's error.
+    pub fn serialize<S: Serializer>(route: &ProviderRoute, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(route.config_name())
+    }
+
+    /// Deserializes either spelling.
+    ///
+    /// # Errors
+    /// Fails on an unknown route name.
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<ProviderRoute, D::Error> {
+        let raw = String::deserialize(d)?;
+        ProviderRoute::parse(&raw)
+            .ok_or_else(|| serde::de::Error::custom(format!("unknown search route `{raw}`")))
+    }
 }
 
 /// Provider-specific private configuration.
@@ -140,6 +194,7 @@ impl fmt::Debug for ProviderConfig {
 /// Each role is backed by an ordered list of providers: the first usable one
 /// answers and the rest are fallbacks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
     /// Ranked web results (links with snippets) for a query.
@@ -165,6 +220,22 @@ impl Role {
     }
 }
 
+/// Every role, in display order.
+pub const ROLES: [Role; 3] = Role::ALL;
+
+/// The `[search.roles]` key for a role, which is its serde name.
+#[must_use]
+pub const fn role_key(role: Role) -> &'static str {
+    role.as_str()
+}
+
+/// Parses a `[search.roles]` key; surrounding whitespace is ignored.
+#[must_use]
+pub fn parse_role(key: &str) -> Option<Role> {
+    let key = key.trim();
+    ROLES.into_iter().find(|role| role_key(*role) == key)
+}
+
 impl fmt::Display for Role {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
@@ -173,6 +244,7 @@ impl fmt::Display for Role {
 
 /// How provider tools appear to the host.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum PresentationMode {
     /// One generic tool per [`Role`] that has at least one usable provider,
@@ -185,6 +257,31 @@ pub enum PresentationMode {
     Router,
     /// One tool bound to the configured provider.
     OneProvider,
+}
+
+impl PresentationMode {
+    /// The stable wire and configuration name.
+    #[must_use]
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Roles => "roles",
+            Self::AllTools => "all_tools",
+            Self::Router => "router",
+            Self::OneProvider => "one_provider",
+        }
+    }
+
+    /// Parses a name, case-insensitively, ignoring surrounding whitespace.
+    #[must_use]
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "roles" => Some(Self::Roles),
+            "all_tools" => Some(Self::AllTools),
+            "router" => Some(Self::Router),
+            "one_provider" => Some(Self::OneProvider),
+            _ => None,
+        }
+    }
 }
 
 /// Presentation configuration.

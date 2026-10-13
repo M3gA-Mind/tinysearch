@@ -19,6 +19,13 @@ publish = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Off by default: a host that only makes calls should not pay for it.
+schemars = { workspace = true, optional = true }
+
+[features]
+default = []
+# Derive `JsonSchema` on `ProviderRoute`, `PresentationMode` and `Role`.
+schemars = ["dep:schemars"]
 
 [lints]
 workspace = true

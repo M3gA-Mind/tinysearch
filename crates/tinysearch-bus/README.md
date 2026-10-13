@@ -22,3 +22,16 @@ usable on `ProviderRoute::Backend`. It serves the search, answer (quick only),
 and contents roles through `parallel_search`, `parallel_chat`, and
 `parallel_extract`. The `errors` module holds the stable failure codes
 carried in bus error messages and `code_of` to read them.
+
+Contract version 2.1 adds two pure, I/O-free modules: `labels` (provider id to
+display name) and `render` (the canonical text and markdown rendering of an
+`ExecuteToolResponse`, plus `subject` for the tool arguments). Snapshot tests
+pin the output byte for byte.
+
+Contract version 2.2 adds `errors::classify` (error message to `Category`:
+exhausted, unauthorized, ...) and `errors::exhausts_providers`; the `Role`
+helpers `ROLES`, `role_key` and `parse_role`; `PresentationMode::{as_str,
+parse}`; `ProviderRoute::{config_name, parse}` with the `managed_route` serde
+adapter (user config says `managed`, the wire says `backend`); and an optional
+`schemars` feature deriving `JsonSchema` on `ProviderRoute`,
+`PresentationMode` and `Role`.

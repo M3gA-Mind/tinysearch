@@ -5,10 +5,9 @@
 //! component when a payload's wire form changes incompatibly or a member is
 //! removed or renamed, and the minor component when a member or an optional
 //! field is added. It is deliberately independent of the package version the
-//! release workflow bumps, which tracks the shipped artifact.
 
 /// The wire contract version this crate defines.
-pub const CONTRACT_VERSION: (u32, u32) = (2, 0);
+pub const CONTRACT_VERSION: (u32, u32) = (2, 2);
 
 /// Returns whether a host holding [`CONTRACT_VERSION`] can bind to a module
 /// reporting `module`.

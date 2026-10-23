@@ -120,3 +120,7 @@ fn classify_body(value: &Value) -> Option<Error> {
     .any(|phrase| message.contains(phrase))
     .then_some(Error::InsufficientBalance)
 }
+
+#[cfg(test)]
+#[path = "http_tests.rs"]
+mod tests;
